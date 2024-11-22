@@ -181,7 +181,7 @@ if __name__ == "__main__":
     weight_E_std = 0.1
     weight_Q_std = 0.1
 
-    s = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
+    x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
 
     stack = NN(
         n,
@@ -193,6 +193,6 @@ if __name__ == "__main__":
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
     )
-    output = stack(s)
+    output = stack(x)
 
     print("Output shape:", output.shape)  # Should be (d, n_t, n)
