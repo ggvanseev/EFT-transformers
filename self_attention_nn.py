@@ -3,20 +3,23 @@ import torch.nn as nn
 
 
 class LinearMLPBlock(nn.Module):
-    def __init__(self, n_in, n, std_W=0.02):
+    def __init__(self, n_in, n, std_W=0.02, n_invariance_flag=False):
         super(LinearMLPBlock, self).__init__()
         self.n = n
         self.n_in = n_in
 
         self.input_transform = nn.Linear(n_in, n)
 
-        self._initialize_weights(std_W=std_W)
+        self._initialize_weights(std_W=std_W, n_invariance_flag=n_invariance_flag)
 
-    def _initialize_weights(self, std_W):
+    def _initialize_weights(self, std_W, n_invariance_flag=False):
         """
         Custom initialization of weights with Gaussian distribution.
         :param std: Standard deviation of the Gaussian distribution
         """
+        if n_invariance_flag:
+            std_W /= self.n_in
+
         nn.init.normal_(
             self.input_transform.weight, mean=0.0, std=std_W
         )  # Initialize input transform with Gaussian
@@ -38,6 +41,7 @@ class AttentionBlock(nn.Module):
         n_t,
         weight_E_std=0.02,
         weight_Q_std=0.02,
+        n_invariance_flag=False,
     ):
         """
         Initialize a single layer.
@@ -58,13 +62,19 @@ class AttentionBlock(nn.Module):
         self.Q = nn.Parameter(torch.empty(n_h, n, n))  # Shape (n_h, n, n)
 
         # Initialize weights with specified Gaussian width
-        self._initialize_weights(std_E=weight_E_std, std_Q=weight_Q_std)
+        self._initialize_weights(
+            std_E=weight_E_std, std_Q=weight_Q_std, n_invariance_flag=n_invariance_flag
+        )
 
-    def _initialize_weights(self, std_E, std_Q):
+    def _initialize_weights(self, std_E, std_Q, n_invariance_flag=False):
         """
         Custom initialization of weights with Gaussian distribution.
         :param std: Standard deviation of the Gaussian distribution
         """
+        if n_invariance_flag:
+            std_E /= self.n * self.n_h**2 * self.n_t**2
+            std_Q = std_Q * self.n_h / self.n**2
+
         nn.init.normal_(self.E, mean=0.0, std=std_E)  # Initialize E with Gaussian
         nn.init.normal_(self.Q, mean=0.0, std=std_Q)  # Initialize Q with Gaussian
 
@@ -122,6 +132,7 @@ class NN(nn.Module):
         weight_input_std=0.02,
         weight_E_std=0.02,
         weight_Q_std=0.02,
+        n_invariance_flag=False,
     ):
         """
         Initialize a stack of layers.
@@ -135,7 +146,11 @@ class NN(nn.Module):
         self.layers = nn.ModuleList()
 
         # First layer: input size 1 -> n
-        self.layers.append(LinearMLPBlock(n_in, n, std_W=weight_input_std))
+        self.layers.append(
+            LinearMLPBlock(
+                n_in, n, std_W=weight_input_std, n_invariance_flag=n_invariance_flag
+            )
+        )
 
         # Subsequent layers: input and output size n
         for _ in range(num_layers - 1):
@@ -146,6 +161,7 @@ class NN(nn.Module):
                     n_t,
                     weight_E_std=weight_E_std,
                     weight_Q_std=weight_Q_std,
+                    n_invariance_flag=n_invariance_flag,
                 )
             )
 
@@ -153,7 +169,7 @@ class NN(nn.Module):
         # This is done in numpy
         self.layer_outputs = []
 
-    def forward(self, s, store_flag: bool = False):
+    def forward(self, s, store_intermediate_flag: bool = False):
         """
         Forward pass through the stack of layers.
         :param s: Input tensor of shape (d, n_t, 1)
@@ -161,7 +177,7 @@ class NN(nn.Module):
         """
         for layer in self.layers:
             s = layer(s)  # Pass output of one layer as input to the next
-            if store_flag:
+            if store_intermediate_flag:
                 self.layer_outputs.append(s.detach().clone().cpu().numpy())
         return s
 
@@ -178,6 +194,7 @@ if __name__ == "__main__":
     weight_input_std = 0.1
     weight_E_std = 0.1
     weight_Q_std = 0.1
+    n_invariance_flag = True
 
     x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
 
@@ -190,8 +207,9 @@ if __name__ == "__main__":
         weight_input_std=weight_input_std,
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
+        n_invariance_flag=n_invariance_flag,
     )
-    output = stack(x, store_flag=True)
+    output = stack(x, store_intermediate_flag=True)
     intermediate_outputs = stack.layer_outputs
 
     print("Output shape:", output.shape)  # Should be (d, n_t, n)
