@@ -150,6 +150,7 @@ class NN(nn.Module):
             )
 
         # Store the output of each layer
+        # This is done in numpy
         self.layer_outputs = []
 
     def forward(self, s, store_flag: bool = False):
@@ -161,7 +162,7 @@ class NN(nn.Module):
         for layer in self.layers:
             s = layer(s)  # Pass output of one layer as input to the next
             if store_flag:
-                self.layer_outputs.append(s.detach().clone())
+                self.layer_outputs.append(s.detach().clone().cpu().numpy())
         return s
 
 
