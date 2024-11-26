@@ -39,7 +39,9 @@ if dir is None:
     weight_input_std = 0.5
     weight_E_std = 0.5
     weight_Q_std = 0.5
-    n_invariance_flag = False
+    n_invariance_flag = True
+    # n_invariance flag Determines whether the input weights
+    # are made invariant, True is yes, False is no.
 
     # Type of the neural network
     NN_type = "MLP"
@@ -218,32 +220,43 @@ def plot_comparison(
 
     ax[0, 0].plot(layers, correlation_NN_r1)
     ax[0, 0].set_title("NN correlation function r1")
+    ax[0, 0].set_xticks([])
 
     ax[1, 0].plot(layers, correlation_NN_r2)
     ax[1, 0].set_title("NN correlation function r2")
+    ax[1, 0].set_xticks([])
 
     ax[2, 0].plot(layers, correlation_NN_r3)
     ax[2, 0].set_title("NN correlation function r3")
+    ax[2, 0].set_xlabel("Layers")
 
     if corellation_G:
         ax[1, 1].plot(layers, corellation_G)
         ax[1, 1].set_title("Theoretical correlation function r2")
 
-        # Add hyperparameters as text on the side
+    ax[1, 1].set_xticks([])
+    ax[1, 1].set_xticks([])
+    ax[2, 1].set_xlabel("Layers")
+
+    # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
         [
-            (f"{key}: {value}" if len(f"{key}: {value}") < 15 else f"{key}:\n {value}")
+            f"{key}: {value}"
             for key, value in hyperparameters.items()
+            # (f"{key}: {value}" if len(f"{key}: {value}") < 15 else f"{key}:\n {value}")
+            # for key, value in hyperparameters.items()
         ]
     )
     plt.gcf().text(
-        0.88, 0.5, hyperparameters_text, fontsize=10, verticalalignment="center"
+        0.84, 0.5, hyperparameters_text, fontsize=10, verticalalignment="center"
     )
 
     # Set the title for the entire figure
     fig.suptitle("Comparison of Correlation Functions", fontsize=16)
 
-    plt.tight_layout(rect=[0, 0, 0.9, 1])  # Adjust layout to make room for the text box
+    plt.tight_layout(
+        rect=[0, 0, 0.84, 1]
+    )  # Adjust layout to make room for the text box
     plt.savefig(dir + "/" + figname)
 
 
