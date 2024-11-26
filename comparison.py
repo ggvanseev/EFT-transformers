@@ -30,6 +30,9 @@ weight_E_std = 0.5
 weight_Q_std = 0.5
 n_invariance_flag = False
 
+# Type of the neural network
+NN_type = "MLP"
+
 # A random input tensor
 x = torch.randn(d, n_t, n_in)
 
@@ -47,10 +50,12 @@ for N_i in range(N_net):
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
         n_invariance_flag=n_invariance_flag,
+        type=NN_type,
     )
 
     _ = stack(x, store_intermediate_flag=True)
 
+    # TDOO make this more general again, if memory permits
     NN_result[N_i, :] = [stack.layer_outputs[l][0, 0, 0] for l in range(num_layers)]
     # NN_result[N_i, :, :, :, :] = stack.layer_outputs
 
@@ -70,6 +75,7 @@ hyperparameters = {
     "weight_E_std": weight_E_std,
     "weight_Q_std": weight_Q_std,
     "n_invariance_flag": n_invariance_flag,
+    "NN_type": NN_type,
 }
 
 with open(f"{dir}/hyperparameters.yaml", "w") as file:
@@ -108,13 +114,17 @@ def correlation_function_NN(
 
 
 NN_result_r1 = correlation_function_NN(NN_result, 1)
+NN_result_r2 = correlation_function_NN(NN_result, 2)
+NN_result_r3 = correlation_function_NN(NN_result, 3)
 
 
 # Compare the results
 
 
 def plot_comparison(
-    correlation_NN,
+    correlation_NN_r1,
+    correlation_NN_r2,
+    correlation_NN_r3,
     corellation_G=None,
     figname="test.png",
     dir=dir,
@@ -130,15 +140,21 @@ def plot_comparison(
     corellation_G: np.ndarray, shape=(layers), optional
     """
 
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    layers = np.arange(correlation_NN.shape[0])
+    fig, ax = plt.subplots(3, 2, figsize=(10, 5))
+    layers = np.arange(correlation_NN_r1.shape[0])
 
-    ax[0].plot(layers, correlation_NN)
-    ax[0].set_title("NN correlation function")
+    ax[0, 0].plot(layers, correlation_NN_r1)
+    ax[0, 0].set_title("NN correlation function r1")
+
+    ax[1, 0].plot(layers, correlation_NN_r2)
+    ax[1, 0].set_title("NN correlation function r2")
+
+    ax[2, 0].plot(layers, correlation_NN_r3)
+    ax[2, 0].set_title("NN correlation function r3")
 
     if corellation_G:
-        ax[1].plot(layers, corellation_G)
-        ax[1].set_title("Theoretical correlation function")
+        ax[1, 1].plot(layers, corellation_G)
+        ax[1, 1].set_title("Theoretical correlation function r2")
 
         # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
@@ -151,8 +167,11 @@ def plot_comparison(
         0.88, 0.5, hyperparameters_text, fontsize=10, verticalalignment="center"
     )
 
+    # Set the title for the entire figure
+    fig.suptitle("Comparison of Correlation Functions", fontsize=16)
+
     plt.tight_layout(rect=[0, 0, 0.9, 1])  # Adjust layout to make room for the text box
     plt.savefig(dir + "/" + figname)
 
 
-plot_comparison(NN_result_r1)
+plot_comparison(NN_result_r1, NN_result_r2, NN_result_r3, figname=f"{NN_type}_dti.png")
