@@ -11,6 +11,7 @@ os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib.pyplot as plt
 from datetime import datetime
 import yaml
+from self_attention_forward_equation import G
 
 # This file performes a comparison between the theoretical forward equation
 # for the covariance matrix of the l-th layer to a neural network layer.
@@ -22,7 +23,7 @@ i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = None  # "/data/theorie/gseevent/edinburgh/results/varying_t_index"
+dir = "/data/theorie/gseevent/edinburgh/results/1126-1923-52"  # "/data/theorie/gseevent/edinburgh/results/varying_t_index"
 
 
 # Create results
@@ -30,9 +31,9 @@ if dir is None:
     # Choose hyperparameters
     N_net = 10  # Number of neural networks
     d = 4  # Number of samples in the batch
-    n_t = 10  # Number of tokens
+    n_t = 20  # Number of tokens
     n_in = 1  # Number of input features
-    n = 2000  # Number of features/neurons in hidden/output layers
+    n = 20  # Number of features/neurons in hidden/output layers
     n_h = 1  # Number of attention heads
     num_layers = 5  # Total number of layers in the stack
     # Width of the Gaussian distribution for initialization
@@ -44,7 +45,7 @@ if dir is None:
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "MLP"
+    NN_type = "multihead-self-attention"  # "multihead-self-attention", or "MLP"
 
     # Store intermediate results, just for debug purposes
     store_intermediate_flag = True
@@ -123,6 +124,10 @@ else:
     n_h = hyperparameters["n_h"]
     num_layers = hyperparameters["num_layers"]
     NN_type = hyperparameters["NN_type"]
+    weight_E_std = hyperparameters["weight_E_std"]
+    weight_Q_std = hyperparameters["weight_Q_std"]
+    weight_input_std = hyperparameters["weight_input_std"]
+    n_invariance_flag = hyperparameters["n_invariance_flag"]
 
     # Update for plotting the current run
     hyperparameters["delta"] = delta
@@ -193,6 +198,33 @@ NN_result_r1 = get_index_or_avg(correlation_function_NN(NN_result, 1), delta, t,
 NN_result_r2 = get_index_or_avg(correlation_function_NN(NN_result, 2), delta, t, i)
 NN_result_r3 = get_index_or_avg(correlation_function_NN(NN_result, 3), delta, t, i)
 
+if NN_type == "multihead-self-attention":
+    # G shape=(n_layers, d, d, t, t)
+    G = G(
+        num_layers,
+        weight_Q_std,
+        weight_E_std,
+        n,
+        n_h,
+        weight_input_std,
+        x,
+        n_independent_flag=n_invariance_flag,
+    )
+
+    if t == "avg":
+        G = np.mean(G, axis=4)
+        G = np.mean(G, axis=3)
+    else:
+        G = G[:, :, :, t, t]
+
+    if delta == "avg":
+        G = np.mean(G, axis=2)
+        G = np.mean(G, axis=1)
+    else:
+        G = G[:, delta, delta]
+else:
+    G = None
+
 # Compare the results
 
 
@@ -230,7 +262,7 @@ def plot_comparison(
     ax[2, 0].set_title("NN correlation function r3")
     ax[2, 0].set_xlabel("Layers")
 
-    if corellation_G:
+    if corellation_G is not None:
         ax[1, 1].plot(layers, corellation_G)
         ax[1, 1].set_title("Theoretical correlation function r2")
 
@@ -264,5 +296,6 @@ plot_comparison(
     NN_result_r1,
     NN_result_r2,
     NN_result_r3,
+    corellation_G=G,
     figname=f"{NN_type}_d{delta}-t{t}-i{i}.png",
 )
