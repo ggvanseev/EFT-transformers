@@ -17,8 +17,8 @@ from self_attention_forward_equation import G
 # for the covariance matrix of the l-th layer to a neural network layer.
 # Index of corellation function
 # Avg means that we sum over all indices and divide by the number of indices
-delta = 0
-t = 0
+delta = "avg"
+t = "avg"
 i = 0
 
 # Provide existing results directory, if None, create a new one with
@@ -251,20 +251,21 @@ def plot_comparison(
     layers = np.arange(correlation_NN_r1.shape[0])
 
     ax[0, 0].plot(layers, correlation_NN_r1)
-    ax[0, 0].set_title("NN correlation function r1")
+    ax[0, 0].set_title("Neural Network Correlation Functions")
+    ax[0, 0].set_ylabel(f"r1_{delta},{t},{i}")
     ax[0, 0].set_xticks([])
 
     ax[1, 0].plot(layers, correlation_NN_r2)
-    ax[1, 0].set_title("NN correlation function r2")
+    ax[1, 0].set_ylabel(f"r2_{delta},{t},{i}")
     ax[1, 0].set_xticks([])
 
     ax[2, 0].plot(layers, correlation_NN_r3)
-    ax[2, 0].set_title("NN correlation function r3")
+    ax[2, 0].set_ylabel(f"r3_{delta},{t},{i}")
     ax[2, 0].set_xlabel("Layers")
 
     if corellation_G is not None:
         ax[1, 1].plot(layers, corellation_G)
-        ax[1, 1].set_title("Theoretical correlation function r2")
+        ax[0, 1].set_title("Theoretical correlation function")
 
     ax[1, 1].set_xticks([])
     ax[1, 1].set_xticks([])
