@@ -133,6 +133,7 @@ class NN(nn.Module):
         weight_E_std=0.02,
         weight_Q_std=0.02,
         n_invariance_flag=False,
+        type="multihead-self-attention",
     ):
         """
         Initialize a stack of layers.
@@ -141,6 +142,8 @@ class NN(nn.Module):
         :param n_t: Number of tokens
         :param num_layers: Total number of layers in the stack
         :param weight_std: Standard deviation of Gaussian distribution for weight initialization
+        :param n_invariance_flag: Flag to enable weight invariance
+        :param type: Type of the model options: ["multihead-self-attention", "MLP"]
         """
         super(NN, self).__init__()
         self.layers = nn.ModuleList()
@@ -154,16 +157,23 @@ class NN(nn.Module):
 
         # Subsequent layers: input and output size n
         for _ in range(num_layers - 1):
-            self.layers.append(
-                AttentionBlock(
-                    n,
-                    n_h,
-                    n_t,
-                    weight_E_std=weight_E_std,
-                    weight_Q_std=weight_Q_std,
-                    n_invariance_flag=n_invariance_flag,
+            if type == "multihead-self-attention":
+                self.layers.append(
+                    AttentionBlock(
+                        n,
+                        n_h,
+                        n_t,
+                        weight_E_std=weight_E_std,
+                        weight_Q_std=weight_Q_std,
+                        n_invariance_flag=n_invariance_flag,
+                    )
                 )
-            )
+            elif type == "MLP":
+                self.layers.append(
+                    LinearMLPBlock(
+                        n, n, std_W=weight_E_std, n_invariance_flag=n_invariance_flag
+                    )
+                )
 
         # Store the output of each layer
         # This is done in numpy
