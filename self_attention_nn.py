@@ -39,6 +39,7 @@ class AttentionBlock(nn.Module):
         n,
         n_h,
         n_t,
+        n_in=None,
         weight_E_std=0.02,
         weight_Q_std=0.02,
         n_invariance_flag=False,
@@ -48,18 +49,22 @@ class AttentionBlock(nn.Module):
         :param n: Number of neurons/features in hidden and output layers
         :param n_h: Number of attention heads
         :param n_t: Number of tokens
+        :param n_in: Number of input features, None if the input is the output of the previous layer
         :param weight_std: Standard deviation of Gaussian distribution for weight initialization
         """
         super(AttentionBlock, self).__init__()
         self.n = n
         self.n_h = n_h
         self.n_t = n_t
+        if n_in is None:
+            n_in = n
+        self.n_in = n_in
 
         # Learnable weights for feature mixing
-        self.E = nn.Parameter(torch.empty(n_h, n, n))  # Shape (n_h, n, n)
+        self.E = nn.Parameter(torch.empty(n_h, n, n_in))  # Shape (n_h, n, n)
 
         # Learnable weights for attention computation
-        self.Q = nn.Parameter(torch.empty(n_h, n, n))  # Shape (n_h, n, n)
+        self.Q = nn.Parameter(torch.empty(n_h, n_in, n_in))  # Shape (n_h, n, n)
 
         # Initialize weights with specified Gaussian width
         self._initialize_weights(
@@ -72,8 +77,8 @@ class AttentionBlock(nn.Module):
         :param std: Standard deviation of the Gaussian distribution
         """
         if n_invariance_flag:
-            std_E /= self.n * self.n_h**2 * self.n_t**2
-            std_Q = std_Q * self.n_h / self.n**2
+            std_E /= self.n_in * self.n_h**2 * self.n_t**2
+            std_Q = std_Q * self.n_h / self.n_in**2
 
         nn.init.normal_(self.E, mean=0.0, std=std_E)  # Initialize E with Gaussian
         nn.init.normal_(self.Q, mean=0.0, std=std_Q)  # Initialize Q with Gaussian
@@ -81,7 +86,7 @@ class AttentionBlock(nn.Module):
     def forward(self, r_prime):
         """
         Forward pass of the layer.
-        :param r_prime: Input tensor of shape: (d, n_t, n)
+        :param r_prime: Input tensor of shape: (d, n_t, n_in)
         :return: Output tensor of shape (d, n_t, n)
         """
         # Compute attention scores Omega_{\delta t_1t_2}^h
@@ -149,11 +154,24 @@ class NN(nn.Module):
         self.layers = nn.ModuleList()
 
         # First layer: input size 1 -> n
-        self.layers.append(
-            LinearMLPBlock(
-                n_in, n, std_W=weight_input_std, n_invariance_flag=n_invariance_flag
+        if type == "multihead-self-attention":
+            self.layers.append(
+                AttentionBlock(
+                    n,
+                    n_h,
+                    n_t,
+                    n_in,
+                    weight_E_std=weight_input_std,
+                    weight_Q_std=weight_Q_std,
+                    n_invariance_flag=n_invariance_flag,
+                )
             )
-        )
+        elif type == "MLP":
+            self.layers.append(
+                LinearMLPBlock(
+                    n_in, n, std_W=weight_input_std, n_invariance_flag=n_invariance_flag
+                )
+            )
 
         # Subsequent layers: input and output size n
         for _ in range(num_layers - 1):
