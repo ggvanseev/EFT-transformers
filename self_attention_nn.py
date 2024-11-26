@@ -8,7 +8,7 @@ class LinearMLPBlock(nn.Module):
         self.n = n
         self.n_in = n_in
 
-        self.input_transform = nn.Linear(n_in, n)
+        self.W = nn.Parameter(torch.empty(n, n_in))  # Shape (n, n_in)
 
         self._initialize_weights(std_W=std_W, n_invariance_flag=n_invariance_flag)
 
@@ -21,7 +21,7 @@ class LinearMLPBlock(nn.Module):
             std_W /= self.n_in
 
         nn.init.normal_(
-            self.input_transform.weight, mean=0.0, std=std_W
+            self.W, mean=0.0, std=std_W
         )  # Initialize input transform with Gaussian
 
     def forward(self, x):
@@ -30,7 +30,7 @@ class LinearMLPBlock(nn.Module):
         :param c: Input tensor of shape: (d, n_t, n_in)
         :return: Output tensor of shape (d, n_t, n)
         """
-        return self.input_transform(x)
+        return torch.einsum("dti,ji->dtj", x, self.W)
 
 
 class AttentionBlock(nn.Module):
