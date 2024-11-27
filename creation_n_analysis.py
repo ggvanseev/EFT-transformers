@@ -23,7 +23,7 @@ i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = "/data/theorie/gseevent/edinburgh/results/1127-1746-47"
+dir = None
 
 # Create results
 if dir is None:
@@ -39,12 +39,12 @@ if dir is None:
     weight_input_std = 0.5
     weight_E_std = 0.5
     weight_Q_std = 0.5
-    n_invariance_flag = True
+    invariance_flags = {"n": True, "n_t": False, "n_h": False}
     # n_invariance flag Determines whether the input weights
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "MLP"  # "MHSA", or "MLP"
+    NN_type = "MHSA"  # "MHSA", or "MLP"
 
     # Store intermediate results, just for debug purposes
     store_intermediate_flag = True
@@ -64,7 +64,7 @@ if dir is None:
         weight_input_std=weight_input_std,
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
-        n_invariance_flag=n_invariance_flag,
+        invariance_flags=invariance_flags,
         N_net=N_net,
         type=NN_type,
     )
@@ -95,7 +95,9 @@ if dir is None:
         "weight_input_std": weight_input_std,
         "weight_E_std": weight_E_std,
         "weight_Q_std": weight_Q_std,
-        "n_invariance_flag": n_invariance_flag,
+        "n_invariance_flag": invariance_flags["n"],
+        "nt_invariance_flag": invariance_flags["n_t"],
+        "nh_invariance_flag": invariance_flags["n_h"],
         "NN_type": NN_type,
         "delta": delta,
         "t": t,
@@ -219,7 +221,7 @@ if NN_type == "MHSA":
         n_h,
         weight_input_std,
         x[0],
-        n_independent_flag=n_invariance_flag,
+        invariance_flags=invariance_flags,
     )
 
     if t == "avg":
@@ -239,7 +241,7 @@ elif NN_type == "MLP":
         n,
         weight_input_std,
         x[0, :, 0, :],
-        n_independent_flag=n_invariance_flag,
+        n_independent_flag=invariance_flags["n"],
     )
 
     if delta == "avg":

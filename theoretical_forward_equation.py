@@ -42,7 +42,7 @@ def G_MHSA_forward(
     c_e: float,
     n: int,
     n_h: int,
-    n_independent_flag: bool = False,
+    invariance_flags={"n": True, "n_t": False, "n_h": False},
 ) -> np.ndarray:
     r"""
     Latex notation definition of G for the forward equation:
@@ -56,28 +56,25 @@ def G_MHSA_forward(
     c_e: float, the weight of the encoder-decoder tensor
     n: int, the number of neurons
     n_h: int, the number of heads
-    n_independent_flag: bool, whether to divide by the number of features
+    invariance_flags:dict{bool}, whether to divide by the number of features
     """
+    factor = 1
 
-    if n_independent_flag:
+    if not invariance_flags["n"]:
+        factor *= n**3
+    if invariance_flags["n_t"]:
         n_t = G_prime.shape[2]
+        factor /= n_t**2
+    if invariance_flags["n_h"]:
+        factor /= n_h
 
-        return (
-            2
-            * c_q
-            * c_e
-            / n_t**2
-            * np.einsum("abtu,abvw,abvw->abtu", G_prime, G_prime, G_prime)
-        )
-    else:
-        return (
-            2
-            * c_q
-            * c_e
-            * n**3
-            * n_h
-            * np.einsum("abtu,abvw,abvw->abtu", G_prime, G_prime, G_prime)
-        )
+    return (
+        2
+        * c_q
+        * c_e
+        * factor
+        * np.einsum("abtu,abvw,abvw->abtu", G_prime, G_prime, G_prime)
+    )
 
 
 def G_MHSA(
@@ -88,7 +85,7 @@ def G_MHSA(
     n_h: int,
     c_w: float,
     x: np.ndarray,
-    n_independent_flag: bool = False,
+    invariance_flags={"n": True, "n_t": False, "n_h": False},
 ) -> np.ndarray:
     """
     Use the forward equation to calculate up to the n_layers-th layer
@@ -101,7 +98,7 @@ def G_MHSA(
     n_h: int, the number of heads
     c_w: float, the weight of the first layer
     x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
-    n_independent_flag: bool, whether to divide by the number of features
+    invariance_flags: dict{bool}, whether to divide by the number of features
     output:
     G_all: np.ndarray, shape=(n_layers, d, d, t, t),
     the covariance matrices of all the layers
@@ -114,10 +111,10 @@ def G_MHSA(
 
     for layer in range(n_layers):
         if layer == 0:
-            G_all[layer] = G_MHSA_1(c_w, x, n_independent_flag)
+            G_all[layer] = G_MHSA_1(c_w, x, invariance_flags["n"])
         else:
             G_all[layer] = G_MHSA_forward(
-                G_all[layer - 1], c_q, c_e, n, n_h, n_independent_flag
+                G_all[layer - 1], c_q, c_e, n, n_h, invariance_flags
             )
 
     return G_all
@@ -218,25 +215,27 @@ if __name__ == "__main__":
     weight_E_std = 0.1
     weight_Q_std = 0.1
 
+    invariance_flags = {"n": True, "n_t": False, "n_h": False}
+
     x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
     x = x.cpu().numpy()
 
-    # output = G_MHSA(
+    output = G_MHSA(
+        num_layers,
+        weight_Q_std,
+        weight_E_std,
+        n,
+        n_h,
+        weight_input_std,
+        x,
+        invariance_flags=invariance_flags,
+    )
+    # output = G_MLP(
     #     num_layers,
-    #     weight_Q_std,
-    #     weight_E_std,
     #     n,
-    #     n_h,
     #     weight_input_std,
-    #     x,
+    #     x[:, 0, :],
     #     n_independent_flag=True,
     # )
-    output = G_MLP(
-        num_layers,
-        n,
-        weight_input_std,
-        x[:, 0, :],
-        n_independent_flag=True,
-    )
 
     print("Output shape:", output.shape)  # Should be (d, n_t, n)

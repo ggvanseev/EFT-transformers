@@ -52,7 +52,7 @@ class AttentionBlock(nn.Module):
         N_net=1,
         weight_E_std=0.02,
         weight_Q_std=0.02,
-        n_invariance_flag=False,
+        invariance_flags={"n": False, "n_t": False, "n_h": False},
     ):
         """
         Initialize a single layer.
@@ -84,17 +84,32 @@ class AttentionBlock(nn.Module):
 
         # Initialize weights with specified Gaussian width
         self._initialize_weights(
-            std_E=weight_E_std, std_Q=weight_Q_std, n_invariance_flag=n_invariance_flag
+            std_E=weight_E_std,
+            std_Q=weight_Q_std,
+            n_invariance_flag=invariance_flags["n"],
+            nt_invariance_flag=invariance_flags["n_t"],
+            nh_invariance_flag=invariance_flags["n_h"],
         )
 
-    def _initialize_weights(self, std_E, std_Q, n_invariance_flag=False):
+    def _initialize_weights(
+        self,
+        std_E,
+        std_Q,
+        n_invariance_flag=False,
+        nt_invariance_flag=False,
+        nh_invariance_flag=False,
+    ):
         """
         Custom initialization of weights with Gaussian distribution.
         :param std: Standard deviation of the Gaussian distribution
         """
         if n_invariance_flag:
-            std_E /= np.sqrt(self.n_in * self.n_h * self.n_t**2)
+            std_E /= np.sqrt(self.n_in)
             std_Q /= self.n_in  # equals np.sqrt(self.n_in**2)
+        if nt_invariance_flag:
+            std_E /= self.n_t  # equals np.sqrt(self.n_t**2)
+        if nh_invariance_flag:
+            std_E /= np.sqrt(self.n_h)
 
         nn.init.normal_(self.E, mean=0.0, std=std_E)  # Initialize E with Gaussian
         nn.init.normal_(self.Q, mean=0.0, std=std_Q)  # Initialize Q with Gaussian
@@ -149,7 +164,7 @@ class NN(nn.Module):
         weight_input_std=0.02,
         weight_E_std=0.02,
         weight_Q_std=0.02,
-        n_invariance_flag=False,
+        invariance_flags={"n": False, "n_t": False, "n_h": False},
         type="MHSA",
     ):
         """
@@ -160,11 +175,12 @@ class NN(nn.Module):
         :param num_layers: Total number of layers in the stack
         :param N_net: Number of networks in the ensemble
         :param weight_std: Standard deviation of Gaussian distribution for weight initialization
-        :param n_invariance_flag: Flag to enable weight invariance
+        :param invariance_flags: Flag to enable weight invariance
         :param type: Type of the model options: ["MHSA", "MLP"]
         """
         super(NN, self).__init__()
         self.layers = nn.ModuleList()
+        n_invariance_flag = invariance_flags["n"]
 
         # First layer: input size 1 -> n
         if type == "MHSA":
@@ -211,7 +227,7 @@ class NN(nn.Module):
                         N_net=N_net,
                         weight_E_std=weight_E_std,
                         weight_Q_std=weight_Q_std,
-                        n_invariance_flag=n_invariance_flag,
+                        invariance_flags=invariance_flags,
                     )
                 )
             elif type == "MLP":
@@ -254,7 +270,7 @@ if __name__ == "__main__":
     weight_input_std = 0.1
     weight_E_std = 0.1
     weight_Q_std = 0.1
-    n_invariance_flag = True
+    invariance_flags = {"n": True, "n_t": False, "n_h": False}
 
     # Number of networks in the ensemble
     N_net = 2
@@ -274,7 +290,7 @@ if __name__ == "__main__":
         weight_input_std=weight_input_std,
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
-        n_invariance_flag=n_invariance_flag,
+        invariance_flags=invariance_flags,
         type=N_type,
     )
     output = stack(x, store_intermediate_flag=True)
