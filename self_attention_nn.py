@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import numpy as np
 
 
 class LinearMLPBlock(nn.Module):
@@ -26,7 +27,7 @@ class LinearMLPBlock(nn.Module):
         :param std: Standard deviation of the Gaussian distribution
         """
         if n_invariance_flag:
-            std_W /= self.n_in
+            std_W /= np.sqrt(self.n_in)
 
         nn.init.normal_(
             self.W, mean=0.0, std=std_W
@@ -38,7 +39,7 @@ class LinearMLPBlock(nn.Module):
         :param c: Input tensor of shape: (N_net,d, n_t, n_in)
         :return: Output tensor of shape (N_net, d, n_t, n)
         """
-        return torch.einsum("Ndti,Nji->Ndtj", x, self.W)
+        return torch.einsum("Nji,Ndti->Ndtj", self.W, x)
 
 
 class AttentionBlock(nn.Module):
@@ -92,8 +93,8 @@ class AttentionBlock(nn.Module):
         :param std: Standard deviation of the Gaussian distribution
         """
         if n_invariance_flag:
-            std_E /= self.n_in * self.n_h**2 * self.n_t**2
-            std_Q = std_Q * self.n_h / self.n_in**2
+            std_E /= np.sqrt(self.n_in * self.n_h * self.n_t**2)
+            std_Q /= self.n_in  # equals np.sqrt(self.n_in**2)
 
         nn.init.normal_(self.E, mean=0.0, std=std_E)  # Initialize E with Gaussian
         nn.init.normal_(self.Q, mean=0.0, std=std_Q)  # Initialize Q with Gaussian

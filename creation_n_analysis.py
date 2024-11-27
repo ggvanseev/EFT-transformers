@@ -23,8 +23,7 @@ i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = None  # "/data/theorie/gseevent/edinburgh/results/1127-1402-15"
-
+dir = "/data/theorie/gseevent/edinburgh/results/1127-1457-57"
 
 # Create results
 if dir is None:
@@ -68,6 +67,7 @@ if dir is None:
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
         n_invariance_flag=n_invariance_flag,
+        N_net=N_net,
         type=NN_type,
     )
 
@@ -311,6 +311,7 @@ def f_gaussian(x, mu=0, sigma=1):
 
 def plot_histogram_comparison(
     NN_result: np.ndarray,
+    x: np.ndarray,
     var_theory: np.ndarray = None,
     figname="histogram.png",
     dir=dir,
@@ -321,6 +322,7 @@ def plot_histogram_comparison(
     Plots the theoretical and neural network histogram per layer.
     Input:
     NN_result: np.ndarray, shape=(layers,N_net)
+    x: np.ndarray, shape=(d, n_t, n)
     var_theory: np.ndarray, shape=(layers)
     figname: str, the name of the figure
     dir: str, the directory to save the figure
@@ -328,23 +330,19 @@ def plot_histogram_comparison(
     hist_bins: int, the number of bins for the histogram
     """
     num_layers = NN_result.shape[0]
-    n_plots_per_side = int(np.sqrt(num_layers)) + 1
+    n_plots_per_side = int(np.sqrt(num_layers + 1)) + 1
     fig, axs = plt.subplots(n_plots_per_side, n_plots_per_side, figsize=(20, 20))
-    # Ensure the axis only at the edges show the labels
-    for ax in axs[0, :]:
-        ax.set_ylabel("Probability Density")
-
-    for ax in axs[:, 0]:
-        ax.set_xlabel("Layers")
-
-    for ax in axs[:, 1]:
-        ax.set_xticks([])
-
     axs = axs.ravel()
 
     for l, ax in enumerate(axs):
-        if l >= num_layers:
+        if l - 1 >= num_layers:
             ax.axis("off")
+            continue
+        elif l >= num_layers:
+            ax.hist(x[0], bins=hist_bins, density=True, label="Input for batch 0")
+            ax.legend(fontsize=13)
+            ax.set_ylabel("Probability Density")
+            ax.set_xlabel("Layers")
             continue
 
         x_grid = np.linspace(
@@ -363,32 +361,24 @@ def plot_histogram_comparison(
                 linestyle="--",
                 color="crimson",
                 markersize=0,
-                label="LO Distribution",
+                label=rf"LO Distribution layer {l+1}: mean=0 $\pm${theoretical_sigma:.5f}",
                 linewidth=3.5,
             )
-            ax.legend(fontsize=13)
 
         # Hisogram the numerical results
-        ax.hist(NN_result[l], bins=hist_bins, density=True)
-
-        ax.text(
-            0.8,
-            0.8,
-            f"Layer {l+1}",
-            fontsize=12,
-            ha="center",
-            va="center",
-            bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        ax.hist(
+            NN_result[l],
+            bins=hist_bins,
+            density=True,
+            label=rf"NN layer {l+1}: mean={np.mean(NN_result[l]):.5f}$\pm${np.std(NN_result[l]):.5f}",
         )
 
+        ax.legend(fontsize=13)
+        ax.set_ylabel("Probability Density")
+        ax.set_xlabel("Layers")
     # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
-        [
-            f"{key}: {value}"
-            for key, value in hyperparameters.items()
-            # (f"{key}: {value}" if len(f"{key}: {value}") < 15 else f"{key}:\n {value}")
-            # for key, value in hyperparameters.items()
-        ]
+        [f"{key}: {value}" for key, value in hyperparameters.items()]
     )
     plt.gcf().text(
         0.84, 0.5, hyperparameters_text, fontsize=10, verticalalignment="center"
@@ -405,6 +395,7 @@ def plot_histogram_comparison(
 
 plot_histogram_comparison(
     NN_result_hist,
+    x=x[0],
     var_theory=G,
     figname=f"{NN_type}_histogram_d{delta}-t{t}-i{i}.png",
 )
