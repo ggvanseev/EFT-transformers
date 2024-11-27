@@ -17,13 +17,13 @@ from self_attention_forward_equation import G
 # for the covariance matrix of the l-th layer to a neural network layer.
 # Index of corellation function
 # Avg means that we sum over all indices and divide by the number of indices
-delta = "avg"
-t = "avg"
+delta = 0
+t = 0
 i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = None
+dir = "/data/theorie/gseevent/edinburgh/results/1127-1402-15"
 
 
 # Create results
@@ -45,7 +45,7 @@ if dir is None:
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "MLP"  # "multihead-self-attention", or "MLP"
+    NN_type = "multihead-self-attention"  # "multihead-self-attention", or "MLP"
     # Number of networks in the ensemble
     N_net = int(2e4)
 
@@ -169,38 +169,47 @@ def correlation_function_NN(
 
 
 # Get the index or average over all indices
-def get_index_or_avg(NN_result: np.ndarray, delta, t, i, d: int = d):
+def get_index_or_avg(plot_type: str, NN_result: np.ndarray, delta, t, i, d: int = d):
     r"""
     Returns the correlation function for a specific index or the average over all indices.
     input:
-    NN_result: np.ndarray, shape=(layers,d,n_t,n)
+    plot_type: str, 'correlation' or 'histogram'
+    NN_result:
+    np.ndarray, shape=(layers,d,n_t,n) if plot_type='correlation'
+    np.ndarray, shape=(layers, N_net,d,n_t,n) if plot_type='histogram'
     delta: int, the delta index, or 'avg'
     t: int, the t index, or 'avg'
     i: int, the i index, or 'avg'
     output:
     NN_result: np.ndarray, shape=(layers)
     """
-    if i == "avg":
-        NN_result = np.mean(NN_result, axis=3)
+    if plot_type == "correlation":
+        axes = {3: i, 2: t, 1: delta}
+    elif plot_type == "histogram":
+        axes = {4: i, 3: t, 2: delta}
     else:
-        NN_result = NN_result[:, :, :, i]
+        raise ValueError("plot_type must be 'correlation' or 'histogram'")
 
-    if t == "avg":
-        NN_result = np.mean(NN_result, axis=2)
-    else:
-        NN_result = NN_result[:, :, t]
-
-    if delta == "avg":
-        NN_result = np.mean(NN_result, axis=1)
-    else:
-        NN_result = NN_result[:, delta]
+    for axis, value in axes.items():
+        if value == "avg":
+            NN_result = np.mean(NN_result, axis=axis)
+        else:
+            NN_result = np.take(NN_result, indices=value, axis=axis)
 
     return NN_result
 
 
-NN_result_r1 = get_index_or_avg(correlation_function_NN(NN_result, 1), delta, t, i)
-NN_result_r2 = get_index_or_avg(correlation_function_NN(NN_result, 2), delta, t, i)
-NN_result_r3 = get_index_or_avg(correlation_function_NN(NN_result, 3), delta, t, i)
+NN_result_r1 = get_index_or_avg(
+    "correlation", correlation_function_NN(NN_result, 1), delta, t, i
+)
+NN_result_r2 = get_index_or_avg(
+    "correlation", correlation_function_NN(NN_result, 2), delta, t, i
+)
+NN_result_r3 = get_index_or_avg(
+    "correlation", correlation_function_NN(NN_result, 3), delta, t, i
+)
+
+NN_result_hist = get_index_or_avg("histogram", NN_result, delta, t, i)
 
 if NN_type == "multihead-self-attention":
     # G shape=(n_layers, d, d, t, t)
@@ -229,10 +238,9 @@ if NN_type == "multihead-self-attention":
 else:
     G = None
 
-# Compare the results
 
-
-def plot_comparison(
+# Compare the results via plotting
+def plot_correlation_function_comparison(
     correlation_NN_r1,
     correlation_NN_r2,
     correlation_NN_r3,
@@ -297,10 +305,115 @@ def plot_comparison(
     plt.savefig(dir + "/" + figname)
 
 
-plot_comparison(
+def f_gaussian(x, mu=0, sigma=1):
+    return np.exp(-0.5 * ((x - mu) / sigma) ** 2) / (sigma * np.sqrt(2 * np.pi))
+
+
+def plot_histogram_comparison(
+    NN_result: np.ndarray,
+    var_theory: np.ndarray = None,
+    figname="histogram.png",
+    dir=dir,
+    hyperparameters=hyperparameters,
+    hist_bins=300,
+):
+    r"""
+    Plots the theoretical and neural network histogram per layer.
+    Input:
+    NN_result: np.ndarray, shape=(layers,N_net)
+    var_theory: np.ndarray, shape=(layers)
+    figname: str, the name of the figure
+    dir: str, the directory to save the figure
+    hyperparameters: dict, the hyperparameters of the run
+    hist_bins: int, the number of bins for the histogram
+    """
+    num_layers = NN_result.shape[0]
+    n_plots_per_side = int(np.sqrt(num_layers)) + 1
+    fig, axs = plt.subplots(n_plots_per_side, n_plots_per_side, figsize=(20, 20))
+    # Ensure the axis only at the edges show the labels
+    for ax in axs[0, :]:
+        ax.set_ylabel("Probability Density")
+
+    for ax in axs[:, 0]:
+        ax.set_xlabel("Layers")
+
+    for ax in axs[:, 1]:
+        ax.set_xticks([])
+
+    axs = axs.ravel()
+
+    for l, ax in enumerate(axs):
+        if l >= num_layers:
+            ax.axis("off")
+            continue
+
+        x_grid = np.linspace(
+            min(NN_result[l]),
+            max(NN_result[l]),
+            1000,
+        )
+
+        # Plot the leading order theoretical distribution, which is a Gaussian.
+        if var_theory is not None:
+            theoretical_sigma = np.sqrt(var_theory[l])
+            theoretical_gaussian = f_gaussian(x_grid, sigma=theoretical_sigma)
+            ax.plot(
+                x_grid,
+                theoretical_gaussian,
+                linestyle="--",
+                color="crimson",
+                markersize=0,
+                label="LO Distribution",
+                linewidth=3.5,
+            )
+            ax.legend(fontsize=13)
+
+        # Hisogram the numerical results
+        ax.hist(NN_result[l], bins=hist_bins, density=True)
+
+        ax.text(
+            0.8,
+            0.8,
+            f"Layer {l+1}",
+            fontsize=12,
+            ha="center",
+            va="center",
+            bbox=dict(facecolor="white", edgecolor="black", boxstyle="round,pad=0.5"),
+        )
+
+    # Add hyperparameters as text on the side
+    hyperparameters_text = "\n".join(
+        [
+            f"{key}: {value}"
+            for key, value in hyperparameters.items()
+            # (f"{key}: {value}" if len(f"{key}: {value}") < 15 else f"{key}:\n {value}")
+            # for key, value in hyperparameters.items()
+        ]
+    )
+    plt.gcf().text(
+        0.84, 0.5, hyperparameters_text, fontsize=10, verticalalignment="center"
+    )
+
+    # Set the title for the entire figure
+    fig.suptitle("Comparison of Correlation Functions", fontsize=16)
+
+    plt.tight_layout(
+        rect=[0, 0, 0.84, 1]
+    )  # Adjust layout to make room for the text box
+    plt.savefig(dir + "/" + figname)
+
+
+plot_histogram_comparison(
+    NN_result_hist,
+    var_theory=G,
+    figname=f"{NN_type}_histogram_d{delta}-t{t}-i{i}.png",
+)
+
+
+plot_correlation_function_comparison(
     NN_result_r1,
     NN_result_r2,
     NN_result_r3,
     corellation_G=G,
-    figname=f"{NN_type}_d{delta}-t{t}-i{i}.png",
+    figname=f"{NN_type}_correlation_d{delta}-t{t}-i{i}.png",
 )
