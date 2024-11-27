@@ -9,7 +9,7 @@ import numpy as np
 
 
 # For the first layer
-def G_1(c_w: float, x: np.ndarray, n_independent_flag: bool = False) -> np.ndarray:
+def G_MHSA_1(c_w: float, x: np.ndarray, n_independent_flag: bool = False) -> np.ndarray:
     r"""
     Latex notation definition of G^{(1)} for the first layer:
     G^{(1)}=\frac{c_W}{2}G^{(1)}_{\delta_1\delta_2t_1t_2ij}
@@ -36,7 +36,7 @@ def G_1(c_w: float, x: np.ndarray, n_independent_flag: bool = False) -> np.ndarr
 # the result by the number of neurons.
 
 
-def G_forward(
+def G_MHSA_forward(
     G_prime: np.ndarray,
     c_q: float,
     c_e: float,
@@ -80,7 +80,7 @@ def G_forward(
         )
 
 
-def G(
+def G_MHSA(
     n_layers: int,
     c_q: float,
     c_e: float,
@@ -114,11 +114,93 @@ def G(
 
     for layer in range(n_layers):
         if layer == 0:
-            G_all[layer] = G_1(c_w, x, n_independent_flag)
+            G_all[layer] = G_MHSA_1(c_w, x, n_independent_flag)
         else:
-            G_all[layer] = G_forward(
+            G_all[layer] = G_MHSA_forward(
                 G_all[layer - 1], c_q, c_e, n, n_h, n_independent_flag
             )
+
+    return G_all
+
+
+# For the linear MLP
+def G_MLP_1(c_w: float, x: np.ndarray, n_independent_flag: bool = False) -> np.ndarray:
+    r"""
+    Latex notation definition of G^{(1)} for the first layer:
+    G^{(1)}=\frac{c_W}{2}G^{(1)}_{\delta_1\delta_2ij}
+    =\frac{c_W}{2}\delta_{ij}\sum_kx_{\delta_1k}x_{\delta_2k}
+    input:
+    c_w: float, the weight of the first layer
+    x: np.ndarray, shape=(d,i), the input tensor with n_in features
+    n_independent_flag: bool, whether to divide by the number of features
+    output:
+    G_1: np.ndarray, G_{\delta_1\delta_2}
+    shape=(d, d), the covariance matrix of the first layer
+    """
+    n_in = x.shape[1]
+
+    if n_independent_flag:
+        c_w /= n_in
+
+    return c_w / 2 * np.einsum("di,ei->de", x, x)
+
+
+def G_MLP_forward(
+    G_prime: np.ndarray,
+    c_w: float,
+    n: int,
+    n_independent_flag: bool = False,
+) -> np.ndarray:
+    r"""
+    Latex notation definition of G for the forward equation:
+    G=G_{\delta_1\delta_2ij}=\frac{C_w}{2}\delta_{ij}\sum_kG'_{\delta_1\delta_2kk}
+    =\frac{C_wn}{2}\delta_{ij}G'_{\delta_1\delta_2}
+    input:
+    G_prime: np.ndarray, shape=(d, d),
+    the covariance matrix of the previous layer
+    c_w: float, the covariance of the weight
+    n: int, the number of neurons
+    n_independent_flag: bool, whether to divide by the number of features
+    """
+
+    if n_independent_flag:
+
+        return c_w / 2 * G_prime
+    else:
+        return c_w * n / 2 * G_prime
+
+
+def G_MLP(
+    n_layers: int,
+    n: int,
+    c_w: float,
+    x: np.ndarray,
+    n_independent_flag: bool = False,
+) -> np.ndarray:
+    """
+    Use the forward equation to calculate up to the n_layers-th layer
+
+    input:
+    n_layers: int, the number of layers
+    n: int, the number of neurons
+    n_h: int, the number of heads
+    c_w: float, the covariance of the weights
+    x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
+    n_independent_flag: bool, whether to divide by the number of features
+    output:
+    G_all: np.ndarray, shape=(n_layers, d, d),
+    the covariance matrices of all the layers
+    """
+    d = x.shape[0]  # Number of datset samples
+
+    # A matrix to store all the layers
+    G_all = np.zeros((n_layers, d, d))
+
+    for layer in range(n_layers):
+        if layer == 0:
+            G_all[layer] = G_MLP_1(c_w, x, n_independent_flag)
+        else:
+            G_all[layer] = G_MLP_forward(G_all[layer - 1], c_w, n, n_independent_flag)
 
     return G_all
 
@@ -139,14 +221,21 @@ if __name__ == "__main__":
     x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
     x = x.cpu().numpy()
 
-    output = G(
+    # output = G_MHSA(
+    #     num_layers,
+    #     weight_Q_std,
+    #     weight_E_std,
+    #     n,
+    #     n_h,
+    #     weight_input_std,
+    #     x,
+    #     n_independent_flag=True,
+    # )
+    output = G_MLP(
         num_layers,
-        weight_Q_std,
-        weight_E_std,
         n,
-        n_h,
         weight_input_std,
-        x,
+        x[:, 0, :],
         n_independent_flag=True,
     )
 

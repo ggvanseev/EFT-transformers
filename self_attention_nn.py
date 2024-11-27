@@ -168,15 +168,24 @@ class NN(nn.Module):
 
         # First layer: input size 1 -> n
         if type == "MHSA":
+            # self.layers.append(
+            #     AttentionBlock(
+            #         n,
+            #         n_h,
+            #         n_t,
+            #         n_in,
+            #         N_net=N_net,
+            #         weight_E_std=weight_input_std,
+            #         weight_Q_std=weight_Q_std,
+            #         n_invariance_flag=n_invariance_flag,
+            #     )
+            # )
             self.layers.append(
-                AttentionBlock(
-                    n,
-                    n_h,
-                    n_t,
+                LinearMLPBlock(
                     n_in,
+                    n,
                     N_net=N_net,
-                    weight_E_std=weight_input_std,
-                    weight_Q_std=weight_Q_std,
+                    std_W=weight_input_std,
                     n_invariance_flag=n_invariance_flag,
                 )
             )

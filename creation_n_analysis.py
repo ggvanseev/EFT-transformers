@@ -11,7 +11,7 @@ os.environ["MPLCONFIGDIR"] = "/tmp"
 import matplotlib.pyplot as plt
 from datetime import datetime
 import yaml
-from self_attention_forward_equation import G
+from theoretical_forward_equation import G_MLP, G_MHSA
 
 # This file performes a comparison between the theoretical forward equation
 # for the covariance matrix of the l-th layer to a neural network layer.
@@ -23,18 +23,18 @@ i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = "/data/theorie/gseevent/edinburgh/results/1127-1457-57"
+dir = "/data/theorie/gseevent/edinburgh/results/1127-1746-47"
 
 # Create results
 if dir is None:
     # Choose hyperparameters
-    N_net = 10  # Number of neural networks
+    N_net = int(2e4)  # Number of neural networks
     d = 4  # Number of samples in the batch
-    n_t = 20  # Number of tokens
+    n_t = 1  # Number of tokens
     n_in = 1  # Number of input features
     n = 20  # Number of features/neurons in hidden/output layers
     n_h = 1  # Number of attention heads
-    num_layers = 5  # Total number of layers in the stack
+    num_layers = 10  # Total number of layers in the stack
     # Width of the Gaussian distribution for initialization
     weight_input_std = 0.5
     weight_E_std = 0.5
@@ -44,9 +44,7 @@ if dir is None:
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "MHSA"  # "MHSA", or "MLP"
-    # Number of networks in the ensemble
-    N_net = int(2e4)
+    NN_type = "MLP"  # "MHSA", or "MLP"
 
     # Store intermediate results, just for debug purposes
     store_intermediate_flag = True
@@ -213,7 +211,7 @@ NN_result_hist = get_index_or_avg("histogram", NN_result, delta, t, i)
 
 if NN_type == "MHSA":
     # G shape=(n_layers, d, d, t, t)
-    G = G(
+    G = G_MHSA(
         num_layers,
         weight_Q_std,
         weight_E_std,
@@ -235,8 +233,22 @@ if NN_type == "MHSA":
         G = np.mean(G, axis=1)
     else:
         G = G[:, delta, delta]
+elif NN_type == "MLP":
+    G = G_MLP(
+        num_layers,
+        n,
+        weight_input_std,
+        x[0, :, 0, :],
+        n_independent_flag=n_invariance_flag,
+    )
+
+    if delta == "avg":
+        G = np.mean(G, axis=2)
+        G = np.mean(G, axis=1)
+    else:
+        G = G[:, delta, delta]
 else:
-    G = None
+    raise ValueError("NN_type must be 'MHSA' or 'MLP'")
 
 
 # Compare the results via plotting
@@ -259,30 +271,25 @@ def plot_correlation_function_comparison(
     corellation_G: np.ndarray, shape=(layers), optional
     """
 
-    fig, ax = plt.subplots(3, 2, figsize=(10, 5))
+    fig, ax = plt.subplots(3, 1, figsize=(10, 5))
     layers = np.arange(correlation_NN_r1.shape[0])
 
-    ax[0, 0].plot(layers, correlation_NN_r1)
-    ax[0, 0].set_title("Neural Network Correlation Functions")
-    ax[0, 0].set_ylabel(f"r1_{delta},{t},{i}")
-    ax[0, 0].set_xticks([])
+    ax[0].plot(layers, correlation_NN_r1)
+    ax[0].set_ylabel(f"r1_{delta},{t},{i}")
+    ax[0].set_xticks([])
 
-    ax[1, 0].plot(layers, correlation_NN_r2)
-    ax[1, 0].set_ylabel(f"r2_{delta},{t},{i}")
-    ax[1, 0].set_xticks([])
+    ax[1].plot(layers, correlation_NN_r2, label="Neural Network")
+    ax[1].set_ylabel(f"r2_{delta},{t},{i}")
+    ax[1].set_xticks([])
 
-    ax[2, 0].plot(layers, correlation_NN_r3)
-    ax[2, 0].set_ylabel(f"r3_{delta},{t},{i}")
-    ax[2, 0].set_xlabel("Layers")
+    ax[2].plot(layers, correlation_NN_r3)
+    ax[2].set_ylabel(f"r3_{delta},{t},{i}")
+    ax[2].set_xlabel("Layers")
 
     if corellation_G is not None:
-        ax[1, 1].plot(layers, corellation_G)
-        ax[0, 1].set_title("Theoretical correlation function")
+        ax[1].plot(layers, corellation_G, label="Theoretical correlation function")
 
-    ax[1, 1].set_xticks([])
-    ax[1, 1].set_xticks([])
-    ax[2, 1].set_xlabel("Layers")
-
+    ax[1].legend()
     # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
         [
@@ -331,7 +338,11 @@ def plot_histogram_comparison(
     """
     num_layers = NN_result.shape[0]
     n_plots_per_side = int(np.sqrt(num_layers + 1)) + 1
-    fig, axs = plt.subplots(n_plots_per_side, n_plots_per_side, figsize=(20, 20))
+    fig, axs = plt.subplots(
+        n_plots_per_side,
+        n_plots_per_side,
+        figsize=(7 * n_plots_per_side, 7 * n_plots_per_side),
+    )
     axs = axs.ravel()
 
     for l, ax in enumerate(axs):
@@ -339,10 +350,11 @@ def plot_histogram_comparison(
             ax.axis("off")
             continue
         elif l >= num_layers:
-            ax.hist(x[0], bins=hist_bins, density=True, label="Input for batch 0")
-            ax.legend(fontsize=13)
-            ax.set_ylabel("Probability Density")
-            ax.set_xlabel("Layers")
+            # ax.hist(x[0], bins=hist_bins, density=True, label="Input for batch 0")
+            # ax.legend(fontsize=13)
+            # ax.set_ylabel("Probability Density")
+            # ax.set_xlabel("Layers")
+            ax.axis("off")
             continue
 
         x_grid = np.linspace(
@@ -381,7 +393,11 @@ def plot_histogram_comparison(
         [f"{key}: {value}" for key, value in hyperparameters.items()]
     )
     plt.gcf().text(
-        0.84, 0.5, hyperparameters_text, fontsize=10, verticalalignment="center"
+        0.84,
+        0.5,
+        hyperparameters_text,
+        fontsize=4 * n_plots_per_side,
+        verticalalignment="center",
     )
 
     # Set the title for the entire figure
