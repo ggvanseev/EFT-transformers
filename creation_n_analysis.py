@@ -23,7 +23,7 @@ i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = "/data/theorie/gseevent/edinburgh/results/1126-1923-52"  # "/data/theorie/gseevent/edinburgh/results/varying_t_index"
+dir = None
 
 
 # Create results
@@ -45,36 +45,38 @@ if dir is None:
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "multihead-self-attention"  # "multihead-self-attention", or "MLP"
+    NN_type = "MLP"  # "multihead-self-attention", or "MLP"
+    # Number of networks in the ensemble
+    N_net = int(2e4)
 
     # Store intermediate results, just for debug purposes
     store_intermediate_flag = True
 
-    # A random input tensor
-    x = torch.randn(d, n_t, n_in)
+    # A random input tensor, shape (N_net, d, n_t, n_in)
+    x = torch.stack([torch.randn(d, n_t, n_in)] * N_net)
 
     # Perform NN training for several models
-    NN_result = np.zeros((N_net, num_layers, d, n_t, n))
-    for N_i in range(N_net):
-        stack = NN(
-            n,
-            n_h,
-            n_t,
-            n_in,
-            num_layers,
-            weight_input_std=weight_input_std,
-            weight_E_std=weight_E_std,
-            weight_Q_std=weight_Q_std,
-            n_invariance_flag=n_invariance_flag,
-            type=NN_type,
-        )
+    NN_result = np.zeros((num_layers, N_net, d, n_t, n))
 
-        _ = stack(x, store_intermediate_flag=store_intermediate_flag)
+    stack = NN(
+        n,
+        n_h,
+        n_t,
+        n_in,
+        num_layers,
+        weight_input_std=weight_input_std,
+        weight_E_std=weight_E_std,
+        weight_Q_std=weight_Q_std,
+        n_invariance_flag=n_invariance_flag,
+        type=NN_type,
+    )
 
-        if store_intermediate_flag:
-            NN_result[N_i, :, :, :, :] = stack.layer_outputs
+    _ = stack(x, store_intermediate_flag=store_intermediate_flag)
 
-        del stack
+    if store_intermediate_flag:
+        NN_result = np.array(stack.layer_outputs)
+
+    del stack
 
     # Save the results
 
@@ -141,7 +143,7 @@ def correlation_function_NN(
     power_1: int,
     r_2: np.ndarray = None,
     power_2: int = 0,
-    expected_shape=(N_net, num_layers, d, n_t, n),
+    expected_shape=(num_layers, N_net, d, n_t, n),
 ):
     r"""
     Calculates the correlation function over an ensemble of neural networks.
@@ -149,19 +151,21 @@ def correlation_function_NN(
     r_1[N_i] = r_{\delta_1 t_1 i}^ell
     Note that for n or m=2 or odd, this equals the connected 'diagrams'.
     input:
-    r_1: np.ndarray, shape=(N_net,layers,d,n_t,n)
-    r_2: np.ndarray, shape=(N_net,layers,d,n_t,n)
+    r_1: np.ndarray, shape=(layers,N_net, d,n_t,n)
+    r_2: np.ndarray, shape=(layers,N_net, d,n_t,n)
     power_1: int, the power to which to raise r_1
     power_2: int, the power to which to raise r_2
+    return:
+    r: np.ndarray, shape=(layers, d, n_t, n)
     """
 
     # Ensure correct input
     assert r_1.shape == expected_shape
 
     if r_2:
-        return np.mean(r_1**power_1 * r_2**power_2, axis=0)
+        return np.mean(r_1**power_1 * r_2**power_2, axis=1)
     else:
-        return np.mean(r_1**power_1, axis=0)
+        return np.mean(r_1**power_1, axis=1)
 
 
 # Get the index or average over all indices
@@ -207,7 +211,7 @@ if NN_type == "multihead-self-attention":
         n,
         n_h,
         weight_input_std,
-        x,
+        x[0],
         n_independent_flag=n_invariance_flag,
     )
 

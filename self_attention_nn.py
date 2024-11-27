@@ -3,12 +3,20 @@ import torch.nn as nn
 
 
 class LinearMLPBlock(nn.Module):
-    def __init__(self, n_in, n, std_W=0.02, n_invariance_flag=False):
+    def __init__(self, n_in, n, N_net: int = 1, std_W=0.02, n_invariance_flag=False):
+        """
+        Initialize a single layer.
+        :param n_in: Number of input features
+        :param n: Number of output features
+        :param N_net: Number of networks in the ensemble
+        :param std_W: Standard deviation of Gaussian distribution for weight initialization
+        :param n_invariance_flag: Flag to enable weight invariance
+        """
         super(LinearMLPBlock, self).__init__()
         self.n = n
         self.n_in = n_in
 
-        self.W = nn.Parameter(torch.empty(n, n_in))  # Shape (n, n_in)
+        self.W = nn.Parameter(torch.empty(N_net, n, n_in))  # Shape (n, n_in)
 
         self._initialize_weights(std_W=std_W, n_invariance_flag=n_invariance_flag)
 
@@ -27,10 +35,10 @@ class LinearMLPBlock(nn.Module):
     def forward(self, x):
         """
         Forward pass of the layer.
-        :param c: Input tensor of shape: (d, n_t, n_in)
-        :return: Output tensor of shape (d, n_t, n)
+        :param c: Input tensor of shape: (N_net,d, n_t, n_in)
+        :return: Output tensor of shape (N_net, d, n_t, n)
         """
-        return torch.einsum("dti,ji->dtj", x, self.W)
+        return torch.einsum("Ndti,Nji->Ndtj", x, self.W)
 
 
 class AttentionBlock(nn.Module):
@@ -40,6 +48,7 @@ class AttentionBlock(nn.Module):
         n_h,
         n_t,
         n_in=None,
+        N_net=1,
         weight_E_std=0.02,
         weight_Q_std=0.02,
         n_invariance_flag=False,
@@ -50,6 +59,7 @@ class AttentionBlock(nn.Module):
         :param n_h: Number of attention heads
         :param n_t: Number of tokens
         :param n_in: Number of input features, None if the input is the output of the previous layer
+        :param N_net: Number of networks in the ensemble
         :param weight_std: Standard deviation of Gaussian distribution for weight initialization
         """
         super(AttentionBlock, self).__init__()
@@ -59,12 +69,17 @@ class AttentionBlock(nn.Module):
         if n_in is None:
             n_in = n
         self.n_in = n_in
+        self.N_net = N_net
 
         # Learnable weights for feature mixing
-        self.E = nn.Parameter(torch.empty(n_h, n, n_in))  # Shape (n_h, n, n)
+        self.E = nn.Parameter(
+            torch.empty(N_net, n_h, n, n_in)
+        )  # Shape (N_net, n_h, n, n)
 
         # Learnable weights for attention computation
-        self.Q = nn.Parameter(torch.empty(n_h, n_in, n_in))  # Shape (n_h, n, n)
+        self.Q = nn.Parameter(
+            torch.empty(N_net, n_h, n_in, n_in)
+        )  # Shape (N_net, n_h, n, n)
 
         # Initialize weights with specified Gaussian width
         self._initialize_weights(
@@ -86,18 +101,19 @@ class AttentionBlock(nn.Module):
     def forward(self, r_prime):
         """
         Forward pass of the layer.
-        :param r_prime: Input tensor of shape: (d, n_t, n_in)
-        :return: Output tensor of shape (d, n_t, n)
+        :param r_prime: Input tensor of shape: (N_net, d, n_t, n_in)
+        :return: Output tensor of shape (N_net, d, n_t, n)
         """
         # Compute attention scores Omega_{\delta t_1t_2}^h
         # Omega = [\delta, h, t_1, t_2]
-        # Shape of Omega: (d, n_h, n_t, n_t)
+        # Shape of Omega: (N_net, d, n_h, n_t, n_t)
         Omega = torch.zeros(
-            (r_prime.size(0), self.n_h, self.n_t, self.n_t), device=r_prime.device
+            (self.N_net, r_prime.size(1), self.n_h, self.n_t, self.n_t),
+            device=r_prime.device,
         )
 
         # Compute Omega_{\delta t_1t_2}^h = r'_{\delta t_1 i} Q^h_{ij} r'_{\delta t_2 j}
-        Omega = torch.einsum("bti,hij,buj->bhtu", r_prime, self.Q, r_prime)
+        Omega = torch.einsum("Nbti,Nhij,Nbuj->Nbhtu", r_prime, self.Q, r_prime)
 
         # Apply Omega_{\delta t_1t_2}^h = \Theta(t_1-t_2)omega_{\delta t_1t_2}^h
         # Create a lower triangular mask in the [t_1,t_2] matrix and apply it to
@@ -106,22 +122,16 @@ class AttentionBlock(nn.Module):
             torch.tril(torch.ones(self.n_t, self.n_t, device=r_prime.device))
             .unsqueeze(0)
             .unsqueeze(0)
+            .unsqueeze(0)
         )
         Omega = Omega * mask
 
-        # Note that the above computation is equivalent to:
-        # Omega1 = torch.zeros_like(Omega)
-        # for b in range(Omega.size(0)):
-        #     for h in range(Omega.size(1)):
-        #         Omega1[b, h, :, :] = torch.tril(Omega[b, h, :, :])
-
-        # Compute the final output r_{\delta,t,i}
-        # r = [\delta, t, i]
-        # Shape of r: (d, n_t, n)
+        # Shape of r: (N_net, d, n_t, n)
         r = torch.zeros_like(r_prime)
 
         # Compute r_{\delta,t_1,i} = \Omega_{\delta t_1t_2}^h E^h_{ij} r'_{\delta  t_2j}
-        r = torch.einsum("bhtu,hij,buj->bti", Omega, self.E, r_prime)
+        # per network N_i
+        r = torch.einsum("Nbhtu,Nhij,Nbuj->Nbti", Omega, self.E, r_prime)
 
         return r
 
@@ -134,6 +144,7 @@ class NN(nn.Module):
         n_t,
         n_in,
         num_layers,
+        N_net=1,
         weight_input_std=0.02,
         weight_E_std=0.02,
         weight_Q_std=0.02,
@@ -141,11 +152,12 @@ class NN(nn.Module):
         type="multihead-self-attention",
     ):
         """
-        Initialize a stack of layers.
+        Initialize a stack of layers for N_net networks.
         :param n: Number of neurons/features in hidden and output layers
         :param n_h: Number of attention heads
         :param n_t: Number of tokens
         :param num_layers: Total number of layers in the stack
+        :param N_net: Number of networks in the ensemble
         :param weight_std: Standard deviation of Gaussian distribution for weight initialization
         :param n_invariance_flag: Flag to enable weight invariance
         :param type: Type of the model options: ["multihead-self-attention", "MLP"]
@@ -161,6 +173,7 @@ class NN(nn.Module):
                     n_h,
                     n_t,
                     n_in,
+                    N_net=N_net,
                     weight_E_std=weight_input_std,
                     weight_Q_std=weight_Q_std,
                     n_invariance_flag=n_invariance_flag,
@@ -169,7 +182,11 @@ class NN(nn.Module):
         elif type == "MLP":
             self.layers.append(
                 LinearMLPBlock(
-                    n_in, n, std_W=weight_input_std, n_invariance_flag=n_invariance_flag
+                    n_in,
+                    n,
+                    N_net=N_net,
+                    std_W=weight_input_std,
+                    n_invariance_flag=n_invariance_flag,
                 )
             )
 
@@ -181,6 +198,7 @@ class NN(nn.Module):
                         n,
                         n_h,
                         n_t,
+                        N_net=N_net,
                         weight_E_std=weight_E_std,
                         weight_Q_std=weight_Q_std,
                         n_invariance_flag=n_invariance_flag,
@@ -189,7 +207,11 @@ class NN(nn.Module):
             elif type == "MLP":
                 self.layers.append(
                     LinearMLPBlock(
-                        n, n, std_W=weight_E_std, n_invariance_flag=n_invariance_flag
+                        n,
+                        n,
+                        N_net=N_net,
+                        std_W=weight_E_std,
+                        n_invariance_flag=n_invariance_flag,
                     )
                 )
 
@@ -224,7 +246,13 @@ if __name__ == "__main__":
     weight_Q_std = 0.1
     n_invariance_flag = True
 
-    x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
+    # Number of networks in the ensemble
+    N_net = 2
+    N_type = "MLP"  # "multihead-self-attention", or "MLP"
+
+    x = torch.stack(
+        [torch.randn(d, n_t, n_in)] * N_net
+    )  # Input tensor with size n_in per token
 
     stack = NN(
         n,
@@ -232,10 +260,12 @@ if __name__ == "__main__":
         n_t,
         n_in,
         num_layers,
+        N_net=N_net,
         weight_input_std=weight_input_std,
         weight_E_std=weight_E_std,
         weight_Q_std=weight_Q_std,
         n_invariance_flag=n_invariance_flag,
+        type=N_type,
     )
     output = stack(x, store_intermediate_flag=True)
     intermediate_outputs = stack.layer_outputs
