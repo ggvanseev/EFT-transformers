@@ -23,7 +23,7 @@ i = 0
 
 # Provide existing results directory, if None, create a new one with
 # hyperparameters to set below
-dir = "/data/theorie/gseevent/edinburgh/results/1127-1402-15"
+dir = None  # "/data/theorie/gseevent/edinburgh/results/1127-1402-15"
 
 
 # Create results
@@ -45,7 +45,7 @@ if dir is None:
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "multihead-self-attention"  # "multihead-self-attention", or "MLP"
+    NN_type = "MHSA"  # "MHSA", or "MLP"
     # Number of networks in the ensemble
     N_net = int(2e4)
 
@@ -211,7 +211,7 @@ NN_result_r3 = get_index_or_avg(
 
 NN_result_hist = get_index_or_avg("histogram", NN_result, delta, t, i)
 
-if NN_type == "multihead-self-attention":
+if NN_type == "MHSA":
     # G shape=(n_layers, d, d, t, t)
     G = G(
         num_layers,

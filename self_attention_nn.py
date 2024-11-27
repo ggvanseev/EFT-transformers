@@ -149,7 +149,7 @@ class NN(nn.Module):
         weight_E_std=0.02,
         weight_Q_std=0.02,
         n_invariance_flag=False,
-        type="multihead-self-attention",
+        type="MHSA",
     ):
         """
         Initialize a stack of layers for N_net networks.
@@ -160,13 +160,13 @@ class NN(nn.Module):
         :param N_net: Number of networks in the ensemble
         :param weight_std: Standard deviation of Gaussian distribution for weight initialization
         :param n_invariance_flag: Flag to enable weight invariance
-        :param type: Type of the model options: ["multihead-self-attention", "MLP"]
+        :param type: Type of the model options: ["MHSA", "MLP"]
         """
         super(NN, self).__init__()
         self.layers = nn.ModuleList()
 
         # First layer: input size 1 -> n
-        if type == "multihead-self-attention":
+        if type == "MHSA":
             self.layers.append(
                 AttentionBlock(
                     n,
@@ -192,7 +192,7 @@ class NN(nn.Module):
 
         # Subsequent layers: input and output size n
         for _ in range(num_layers - 1):
-            if type == "multihead-self-attention":
+            if type == "MHSA":
                 self.layers.append(
                     AttentionBlock(
                         n,
@@ -248,7 +248,7 @@ if __name__ == "__main__":
 
     # Number of networks in the ensemble
     N_net = 2
-    N_type = "MLP"  # "multihead-self-attention", or "MLP"
+    N_type = "MHSA"  # "MHSA", or "MLP"
 
     x = torch.stack(
         [torch.randn(d, n_t, n_in)] * N_net
