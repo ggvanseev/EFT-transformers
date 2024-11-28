@@ -17,7 +17,7 @@ from theoretical_forward_equation import G_MLP, G_MHSA
 # for the covariance matrix of the l-th layer to a neural network layer.
 # Index of corellation function
 # Avg means that we sum over all indices and divide by the number of indices
-delta = 0
+delta = 4
 t = 0
 i = 0
 
@@ -30,16 +30,16 @@ if dir is None:
     # Choose hyperparameters
     N_net = int(2e4)  # Number of neural networks
     d = 4  # Number of samples in the batch
-    n_t = 1  # Number of tokens
+    n_t = 20  # Number of tokens
     n_in = 1  # Number of input features
-    n = 20  # Number of features/neurons in hidden/output layers
+    n = int(20)  # Number of features/neurons in hidden/output layers
     n_h = 1  # Number of attention heads
     num_layers = 10  # Total number of layers in the stack
     # Width of the Gaussian distribution for initialization
     weight_input_std = 0.5
     weight_E_std = 0.5
     weight_Q_std = 0.5
-    invariance_flags = {"n": True, "n_t": False, "n_h": False}
+    invariance_flags = {"n": True, "n_t": True, "n_h": True}
     # n_invariance flag Determines whether the input weights
     # are made invariant, True is yes, False is no.
 
@@ -378,6 +378,7 @@ def plot_histogram_comparison(
                 label=rf"LO Distribution layer {l+1}: mean=0 $\pm${theoretical_sigma:.5f}",
                 linewidth=3.5,
             )
+            ax.set_ylim(top=np.max(theoretical_gaussian) * 1.3)
 
         # Hisogram the numerical results
         ax.hist(
@@ -390,6 +391,7 @@ def plot_histogram_comparison(
         ax.legend(fontsize=13)
         ax.set_ylabel("Probability Density")
         ax.set_xlabel("Layers")
+
     # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
         [f"{key}: {value}" for key, value in hyperparameters.items()]
