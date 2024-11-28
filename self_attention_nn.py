@@ -132,22 +132,14 @@ class AttentionBlock(nn.Module):
         Omega = torch.einsum("Nbti,Nhij,Nbuj->Nbhtu", r_prime, self.Q, r_prime)
 
         # Apply Omega_{\delta t_1t_2}^h = \Theta(t_1-t_2)omega_{\delta t_1t_2}^h
-        # Create a lower triangular mask in the [t_1,t_2] matrix and apply it to
-        # each element of the batch and each head.
-        mask = (
-            torch.tril(torch.ones(self.n_t, self.n_t, device=r_prime.device))
-            .unsqueeze(0)
-            .unsqueeze(0)
-            .unsqueeze(0)
-        )
-        Omega = Omega * mask
+        # Create a lower triangular mask with shape [t_1,t_2]
+        Theta = torch.tril(torch.ones(self.n_t, self.n_t, device=r_prime.device))
 
         # Shape of r: (N_net, d, n_t, n)
-        r = torch.zeros_like(r_prime)
-
-        # Compute r_{\delta,t_1,i} = \Omega_{\delta t_1t_2}^h E^h_{ij} r'_{\delta  t_2j}
+        # Compute r_{\delta,t_1,i} = \Omega_{\delta t_1t_2}^h\Theta(t_1-t_2)
+        # E^h_{ij} r'_{\delta  t_2j}
         # per network N_i
-        r = torch.einsum("Nbhtu,Nhij,Nbuj->Nbti", Omega, self.E, r_prime)
+        r = torch.einsum("Nbhtu,tu,Nhij,Nbuj->Nbti", Omega, Theta, self.E, r_prime)
 
         return r
 

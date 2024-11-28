@@ -47,7 +47,7 @@ def G_MHSA_forward(
     r"""
     Latex notation definition of G for the forward equation:
     G=G_{\delta_1\delta_2t_1t_2ij}=2c_qc_e\delta_{ij}n^3n_h
-    G'_{\delta_1\delta_2t_1t_2ll}\sum_{t_3t_4}
+    G'_{\delta_1\delta_2t_1t_2ll}\sum_{t_3t_4}\Theta(t_1-t_3)\Theta(t_2-t_4)
     G'_{\delta_1\delta_2t_3t_4kk}G'_{\delta_1\delta_2t_3t_4mm}
     input:
     G_prime: np.ndarray, shape=(d, d, t, t),
@@ -59,21 +59,26 @@ def G_MHSA_forward(
     invariance_flags:dict{bool}, whether to divide by the number of features
     """
     factor = 1
+    n_t = G_prime.shape[2]
 
     if not invariance_flags["n"]:
         factor *= n**3
     if invariance_flags["n_t"]:
-        n_t = G_prime.shape[2]
         factor /= n_t**2
     if invariance_flags["n_h"]:
         factor /= n_h
+
+    # Theta
+    Theta = np.tril(np.ones((n_t, n_t)))
 
     return (
         2
         * c_q
         * c_e
         * factor
-        * np.einsum("abtu,abvw,abvw->abtu", G_prime, G_prime, G_prime)
+        * np.einsum(
+            "abtu,tv,uw,abvw,abvw->abtu", G_prime, Theta, Theta, G_prime, G_prime
+        )
     )
 
 
