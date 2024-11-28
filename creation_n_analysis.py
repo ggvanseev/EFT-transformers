@@ -29,23 +29,32 @@ dir = None
 if dir is None:
     # Choose hyperparameters
     N_net = int(2e4)  # Number of neural networks
-    d = 4  # Number of samples in the batch
+    d = 1  # Number of samples in the batch
     n_t = 1  # Number of tokens
     n_in = 1  # Number of input features
-    n = int(20)  # Number of features/neurons in hidden/output layers
-    n_h = 1  # Number of attention heads
-    num_layers = 10  # Total number of layers in the stack
+    n = int(200)  # Number of features/neurons in hidden/output layers
+    n_h = 10  # Number of attention heads
+    num_layers = 4  # Total number of layers in the stack
     # Width of the Gaussian distribution for initialization
     # For the naming convetion see the added paper
     W_std = 0.5
     E_std = 0.5
     Q_std = 0.5
-    invariance_flags = {"n": True, "n_t": True, "n_h": True}
-    # n_invariance flag Determines whether the input weights
-    # are made invariant, True is yes, False is no.
+
+    # Theoretical choices:
+    # n_invariance flag Determines whether the weights
+    # are made invariant with respect to the number of
+    # , True is yes, False is no.
+    invariance_flags = {"n": True, "n_t": True, "n_h": False}
+
+    # forward_use_std_flag, if True, the forward equation uses
+    # the std instead of the variance. Note that this is
+    # erronous, but succesful when comparing to numerical results
+    # If False, the forward equation uses the variance (as it should)
+    forward_use_std_flag = False
 
     # Type of the neural network
-    NN_type = "MLP"  # "MHSA", or "MLP"
+    NN_type = "MHSA"  # "MHSA", or "MLP"
 
     # Store intermediate results, just for debug purposes
     store_intermediate_flag = True
@@ -99,6 +108,7 @@ if dir is None:
         "n_invariance_flag": invariance_flags["n"],
         "nt_invariance_flag": invariance_flags["n_t"],
         "nh_invariance_flag": invariance_flags["n_h"],
+        "forward_use_std_flag": forward_use_std_flag,
         "NN_type": NN_type,
         "delta": delta,
         "t": t,
@@ -130,7 +140,12 @@ else:
     E_std = hyperparameters["E_std"]
     Q_std = hyperparameters["Q_std"]
     W_std = hyperparameters["W_std"]
+    invariance_flags = dict()
+    invariance_flags["n"] = hyperparameters["n_invariance_flag"]
+    invariance_flags["n_t"] = hyperparameters["nt_invariance_flag"]
+    invariance_flags["n_h"] = hyperparameters["nh_invariance_flag"]
     n_invariance_flag = hyperparameters["n_invariance_flag"]
+    forward_use_std_flag = hyperparameters["forward_use_std_flag"]
 
     # Update for plotting the current run
     hyperparameters["delta"] = delta
@@ -223,6 +238,7 @@ if NN_type == "MHSA":
         W_std,
         x[0],
         invariance_flags=invariance_flags,
+        forward_use_std_flag=forward_use_std_flag,
     )
 
     if t == "avg":
@@ -243,6 +259,7 @@ elif NN_type == "MLP":
         W_std,
         x[0, :, 0, :],
         n_independent_flag=invariance_flags["n"],
+        forward_use_std_flag=forward_use_std_flag,
     )
 
     if delta == "avg":
@@ -283,6 +300,7 @@ def plot_correlation_function_comparison(
 
     ax[1].plot(layers, correlation_NN_r2, label="Neural Network")
     ax[1].set_ylabel(f"r2_{delta},{t},{i}")
+    ax[1].set_yscale("log")
     ax[1].set_xticks([])
 
     ax[2].plot(layers, correlation_NN_r3)
@@ -296,10 +314,8 @@ def plot_correlation_function_comparison(
     # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
         [
-            f"{key}: {value}"
+            (f"{key}:\n {value}" if ("flag" in str(key)) else f"{key}: {value}")
             for key, value in hyperparameters.items()
-            # (f"{key}: {value}" if len(f"{key}: {value}") < 15 else f"{key}:\n {value}")
-            # for key, value in hyperparameters.items()
         ]
     )
     plt.gcf().text(
@@ -400,7 +416,10 @@ def plot_histogram_comparison(
 
     # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
-        [f"{key}: {value}" for key, value in hyperparameters.items()]
+        [
+            (f"{key}:\n {value}" if ("flag" in str(key)) else f"{key}: {value}")
+            for key, value in hyperparameters.items()
+        ]
     )
     plt.gcf().text(
         0.84,

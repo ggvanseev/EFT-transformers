@@ -91,6 +91,7 @@ def G_MHSA(
     c_w: float,
     x: np.ndarray,
     invariance_flags={"n": True, "n_t": False, "n_h": False},
+    forward_use_std_flag: bool = False,
 ) -> np.ndarray:
     """
     Use the forward equation to calculate up to the n_layers-th layer
@@ -104,6 +105,10 @@ def G_MHSA(
     c_w: float, the weight of the first layer
     x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
     invariance_flags: dict{bool}, whether to divide by the number of features
+    forward_use_std_flag: bool, whether to use the standard deviation or covariance
+    If True, the forward equation uses the std instead of the variance.
+    Note that this is erronous, but succesful when comparing to numerical results
+    If False, the forward equation uses the variance (as it should).
     output:
     G_all: np.ndarray, shape=(n_layers, d, d, t, t),
     the covariance matrices of all the layers
@@ -112,8 +117,12 @@ def G_MHSA(
     n_t = x.shape[1]  # Number of tokens
 
     # Convert standard deviation to covariance
-    c_q = Q_std**2
-    c_e = E_std**2
+    if forward_use_std_flag:
+        c_q = Q_std
+        c_e = E_std
+    else:
+        c_q = Q_std**2
+        c_e = E_std**2
 
     # A matrix to store all the layers
     G_all = np.zeros((n_layers, d, d, n_t, n_t))
@@ -182,6 +191,7 @@ def G_MLP(
     W_std: float,
     x: np.ndarray,
     n_independent_flag: bool = False,
+    forward_use_std_flag: bool = False,
 ) -> np.ndarray:
     """
     Use the forward equation to calculate up to the n_layers-th layer
@@ -193,6 +203,10 @@ def G_MLP(
     W_std: float, the standard deviation of the weights
     x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
     n_independent_flag: bool, whether to divide by the number of features
+    forward_use_std_flag: bool, whether to use the standard deviation or covariance
+    if True, the forward equation uses the std instead of the variance.
+    Note that this is erronous, but succesful when comparing to numerical results
+    If False, the forward equation uses the variance (as it should).
     output:
     G_all: np.ndarray, shape=(n_layers, d, d),
     the covariance matrices of all the layers
@@ -200,7 +214,10 @@ def G_MLP(
     d = x.shape[0]  # Number of datset samples
 
     # Convert standard deviation to covariance
-    c_w = W_std**2
+    if forward_use_std_flag:
+        c_w = W_std
+    else:
+        c_w = W_std**2
 
     # A matrix to store all the layers
     G_all = np.zeros((n_layers, d, d))
@@ -228,6 +245,7 @@ if __name__ == "__main__":
     Q_std = 0.1
 
     invariance_flags = {"n": True, "n_t": False, "n_h": False}
+    forward_use_std_flag = True
 
     NN_type = "MLP"  # "MHSA", or "MLP"
 
@@ -244,6 +262,7 @@ if __name__ == "__main__":
             W_std,
             x,
             invariance_flags=invariance_flags,
+            forward_use_std_flag=forward_use_std_flag,
         )
     elif NN_type == "MLP":
         output = G_MLP(
@@ -251,7 +270,8 @@ if __name__ == "__main__":
             n,
             W_std,
             x[:, 0, :],
-            n_independent_flag=True,
+            n_independent_flag=invariance_flags["n"],
+            forward_use_std_flag=forward_use_std_flag,
         )
 
     print("Output shape:", output.shape)  # Should be (d, n_t, n)
