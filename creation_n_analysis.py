@@ -15,7 +15,9 @@ from plotting import plot_correlation_function_comparison, plot_histogram_compar
 
 # This file performes a comparison between the theoretical forward equation
 # for the covariance matrix of the l-th layer to a neural network layer.
-# Index of corellation function
+
+
+# Index of  the corellation function
 # an integor, or 'avg', which means that we sum over all indices
 # and divide by the total number of indices
 delta = 0
@@ -103,9 +105,9 @@ if dir is None:
     if dir_name is None:
         current_time = datetime.now()
         formatted_time = current_time.strftime("%m%d-%H%M-%S")
-        dir = f"/data/theorie/gseevent/edinburgh/results/{formatted_time}"
+        dir = f"/results/{formatted_time}"
     else:
-        dir = f"/data/theorie/gseevent/edinburgh/results/{dir_name}"
+        dir = f"/results/{dir_name}"
 
     os.makedirs(dir, exist_ok=True)
 
