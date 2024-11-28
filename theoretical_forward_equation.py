@@ -84,8 +84,8 @@ def G_MHSA_forward(
 
 def G_MHSA(
     n_layers: int,
-    c_q: float,
-    c_e: float,
+    Q_std: float,
+    E_std: float,
     n: int,
     n_h: int,
     c_w: float,
@@ -97,8 +97,8 @@ def G_MHSA(
 
     input:
     n_layers: int, the number of layers
-    c_q: float, the weight of the query tensor
-    c_e: float, the weight of the encoder-decoder tensor
+    c_q: float, the standard deviation of the query weight
+    c_e: float, the standard deviation of the encoder-decoder weight
     n: int, the number of neurons
     n_h: int, the number of heads
     c_w: float, the weight of the first layer
@@ -110,6 +110,10 @@ def G_MHSA(
     """
     d = x.shape[0]  # Number of datset samples
     n_t = x.shape[1]  # Number of tokens
+
+    # Convert standard deviation to covariance
+    c_q = Q_std**2
+    c_e = E_std**2
 
     # A matrix to store all the layers
     G_all = np.zeros((n_layers, d, d, n_t, n_t))
@@ -175,7 +179,7 @@ def G_MLP_forward(
 def G_MLP(
     n_layers: int,
     n: int,
-    c_w: float,
+    W_std: float,
     x: np.ndarray,
     n_independent_flag: bool = False,
 ) -> np.ndarray:
@@ -186,7 +190,7 @@ def G_MLP(
     n_layers: int, the number of layers
     n: int, the number of neurons
     n_h: int, the number of heads
-    c_w: float, the covariance of the weights
+    W_std: float, the standard deviation of the weights
     x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
     n_independent_flag: bool, whether to divide by the number of features
     output:
@@ -194,6 +198,9 @@ def G_MLP(
     the covariance matrices of all the layers
     """
     d = x.shape[0]  # Number of datset samples
+
+    # Convert standard deviation to covariance
+    c_w = W_std**2
 
     # A matrix to store all the layers
     G_all = np.zeros((n_layers, d, d))
@@ -216,31 +223,35 @@ if __name__ == "__main__":
     n_h = 8  # Number of attention heads
     num_layers = 3  # Total number of layers in the stack
     # Width of the Gaussian distribution for initialization
-    weight_input_std = 0.1
-    weight_E_std = 0.1
-    weight_Q_std = 0.1
+    W_std = 0.1
+    E_std = 0.1
+    Q_std = 0.1
 
     invariance_flags = {"n": True, "n_t": False, "n_h": False}
+
+    NN_type = "MLP"  # "MHSA", or "MLP"
 
     x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
     x = x.cpu().numpy()
 
-    output = G_MHSA(
-        num_layers,
-        weight_Q_std,
-        weight_E_std,
-        n,
-        n_h,
-        weight_input_std,
-        x,
-        invariance_flags=invariance_flags,
-    )
-    # output = G_MLP(
-    #     num_layers,
-    #     n,
-    #     weight_input_std,
-    #     x[:, 0, :],
-    #     n_independent_flag=True,
-    # )
+    if NN_type == "MHSA":
+        output = G_MHSA(
+            num_layers,
+            Q_std,
+            E_std,
+            n,
+            n_h,
+            W_std,
+            x,
+            invariance_flags=invariance_flags,
+        )
+    elif NN_type == "MLP":
+        output = G_MLP(
+            num_layers,
+            n,
+            W_std,
+            x[:, 0, :],
+            n_independent_flag=True,
+        )
 
     print("Output shape:", output.shape)  # Should be (d, n_t, n)

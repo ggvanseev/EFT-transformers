@@ -17,7 +17,7 @@ from theoretical_forward_equation import G_MLP, G_MHSA
 # for the covariance matrix of the l-th layer to a neural network layer.
 # Index of corellation function
 # Avg means that we sum over all indices and divide by the number of indices
-delta = 4
+delta = 0
 t = 0
 i = 0
 
@@ -30,21 +30,22 @@ if dir is None:
     # Choose hyperparameters
     N_net = int(2e4)  # Number of neural networks
     d = 4  # Number of samples in the batch
-    n_t = 20  # Number of tokens
+    n_t = 1  # Number of tokens
     n_in = 1  # Number of input features
     n = int(20)  # Number of features/neurons in hidden/output layers
     n_h = 1  # Number of attention heads
     num_layers = 10  # Total number of layers in the stack
     # Width of the Gaussian distribution for initialization
-    weight_input_std = 0.5
-    weight_E_std = 0.5
-    weight_Q_std = 0.5
+    # For the naming convetion see the added paper
+    W_std = 0.5
+    E_std = 0.5
+    Q_std = 0.5
     invariance_flags = {"n": True, "n_t": True, "n_h": True}
     # n_invariance flag Determines whether the input weights
     # are made invariant, True is yes, False is no.
 
     # Type of the neural network
-    NN_type = "MHSA"  # "MHSA", or "MLP"
+    NN_type = "MLP"  # "MHSA", or "MLP"
 
     # Store intermediate results, just for debug purposes
     store_intermediate_flag = True
@@ -61,12 +62,12 @@ if dir is None:
         n_t,
         n_in,
         num_layers,
-        weight_input_std=weight_input_std,
-        weight_E_std=weight_E_std,
-        weight_Q_std=weight_Q_std,
+        W_std=W_std,
+        E_std=E_std,
+        Q_std=Q_std,
         invariance_flags=invariance_flags,
         N_net=N_net,
-        type=NN_type,
+        NN_type=NN_type,
     )
 
     _ = stack(x, store_intermediate_flag=store_intermediate_flag)
@@ -92,9 +93,9 @@ if dir is None:
         "n": n,
         "n_h": n_h,
         "num_layers": num_layers,
-        "weight_input_std": weight_input_std,
-        "weight_E_std": weight_E_std,
-        "weight_Q_std": weight_Q_std,
+        "W_std": W_std,
+        "E_std": E_std,
+        "Q_std": Q_std,
         "n_invariance_flag": invariance_flags["n"],
         "nt_invariance_flag": invariance_flags["n_t"],
         "nh_invariance_flag": invariance_flags["n_h"],
@@ -126,9 +127,9 @@ else:
     n_h = hyperparameters["n_h"]
     num_layers = hyperparameters["num_layers"]
     NN_type = hyperparameters["NN_type"]
-    weight_E_std = hyperparameters["weight_E_std"]
-    weight_Q_std = hyperparameters["weight_Q_std"]
-    weight_input_std = hyperparameters["weight_input_std"]
+    E_std = hyperparameters["E_std"]
+    Q_std = hyperparameters["Q_std"]
+    W_std = hyperparameters["W_std"]
     n_invariance_flag = hyperparameters["n_invariance_flag"]
 
     # Update for plotting the current run
@@ -215,11 +216,11 @@ if NN_type == "MHSA":
     # G shape=(n_layers, d, d, t, t)
     G = G_MHSA(
         num_layers,
-        weight_Q_std,
-        weight_E_std,
+        Q_std,
+        E_std,
         n,
         n_h,
-        weight_input_std,
+        W_std,
         x[0],
         invariance_flags=invariance_flags,
     )
@@ -239,7 +240,7 @@ elif NN_type == "MLP":
     G = G_MLP(
         num_layers,
         n,
-        weight_input_std,
+        W_std,
         x[0, :, 0, :],
         n_independent_flag=invariance_flags["n"],
     )
@@ -339,7 +340,11 @@ def plot_histogram_comparison(
     hist_bins: int, the number of bins for the histogram
     """
     num_layers = NN_result.shape[0]
-    n_plots_per_side = int(np.sqrt(num_layers + 1)) + 1
+
+    # Setup the figure to be a square grid
+    n_plots_per_side = int(np.sqrt(num_layers))
+    if np.sqrt(num_layers) % n_plots_per_side != 0:
+        n_plots_per_side += 1
     fig, axs = plt.subplots(
         n_plots_per_side,
         n_plots_per_side,
@@ -347,6 +352,7 @@ def plot_histogram_comparison(
     )
     axs = axs.ravel()
 
+    # Loop over the layers
     for l, ax in enumerate(axs):
         if l - 1 >= num_layers:
             ax.axis("off")
@@ -390,7 +396,7 @@ def plot_histogram_comparison(
 
         ax.legend(fontsize=13)
         ax.set_ylabel("Probability Density")
-        ax.set_xlabel("Layers")
+        ax.set_xlabel("Bin values")
 
     # Add hyperparameters as text on the side
     hyperparameters_text = "\n".join(
@@ -400,7 +406,7 @@ def plot_histogram_comparison(
         0.84,
         0.5,
         hyperparameters_text,
-        fontsize=4 * n_plots_per_side,
+        fontsize=4 * n_plots_per_side + 10,
         verticalalignment="center",
     )
 
