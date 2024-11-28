@@ -63,13 +63,14 @@ def G_MHSA_forward(
 
     if not invariance_flags["n"]:
         factor *= n**3
-    if invariance_flags["n_t"]:
-        factor /= n_t**2
     if invariance_flags["n_h"]:
         factor /= n_h
 
     # Theta
     Theta = np.tril(np.ones((n_t, n_t)))
+    if invariance_flags["n_t"]:
+        row_sums = Theta.sum(axis=1)
+        Theta = Theta / row_sums
 
     return (
         2
@@ -247,7 +248,7 @@ if __name__ == "__main__":
     invariance_flags = {"n": True, "n_t": False, "n_h": False}
     forward_use_std_flag = True
 
-    NN_type = "MLP"  # "MHSA", or "MLP"
+    NN_type = "MHSA"  # "MHSA", or "MLP"
 
     x = torch.randn(d, n_t, n_in)  # Input tensor with size n_in per token
     x = x.cpu().numpy()

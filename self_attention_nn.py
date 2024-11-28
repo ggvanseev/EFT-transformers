@@ -71,6 +71,7 @@ class AttentionBlock(nn.Module):
             n_in = n
         self.n_in = n_in
         self.N_net = N_net
+        self.nt_invariance_flag = invariance_flags["n_t"]
 
         # Learnable weights for feature mixing
         self.E = nn.Parameter(
@@ -106,8 +107,6 @@ class AttentionBlock(nn.Module):
         if n_invariance_flag:
             E_std /= np.sqrt(self.n_in)
             Q_std /= self.n_in  # equals np.sqrt(self.n_in**2)
-        if nt_invariance_flag:
-            E_std /= self.n_t  # equals np.sqrt(self.n_t**2)
         if nh_invariance_flag:
             E_std /= np.sqrt(self.n_h)
 
@@ -134,6 +133,9 @@ class AttentionBlock(nn.Module):
         # Apply Omega_{\delta t_1t_2}^h = \Theta(t_1-t_2)omega_{\delta t_1t_2}^h
         # Create a lower triangular mask with shape [t_1,t_2]
         Theta = torch.tril(torch.ones(self.n_t, self.n_t, device=r_prime.device))
+        if self.nt_invariance_flag:
+            row_sums = Theta.sum(dim=1, keepdim=True)
+            Theta = Theta / row_sums
 
         # Shape of r: (N_net, d, n_t, n)
         # Compute r_{\delta,t_1,i} = \Omega_{\delta t_1t_2}^h\Theta(t_1-t_2)
@@ -262,11 +264,11 @@ if __name__ == "__main__":
     W_std = 0.1
     E_std = 0.1
     Q_std = 0.1
-    invariance_flags = {"n": True, "n_t": False, "n_h": False}
+    invariance_flags = {"n": True, "n_t": True, "n_h": False}
 
     # Number of networks in the ensemble
     N_net = 2
-    N_type = "MLP"  # "MHSA", or "MLP"
+    N_type = "MHSA"  # "MHSA", or "MLP"
 
     x = torch.stack(
         [torch.randn(d, n_t, n_in)] * N_net
