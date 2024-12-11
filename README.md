@@ -41,3 +41,7 @@ See the report added as a pdf in case you would like to check some of the calcul
 
 ## Cite
 Please cite the report in case you use this work.
+
+## License
+GNU GENERAL PUBLIC LICENSE Version 3, 29 June 2007
+See full license attached in `license`
