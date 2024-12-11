@@ -35,3 +35,9 @@ Within each file, there are a set of hyperparameters and additional settings tha
    * Computes and compares the analytical and numerical results for an MLP and a multi-head self-attention (MHSA) neural network. Note that the first layer of the MHSA is an MLP. Various (non-intuitive) settings are explained with comments at the top of the file. The general structure allows you to choose the index of the correlation function to calculate. You can use existing results or create new ones. When creating new results, the hyperparameters need to be set.
    
    If desired, read the added paper for more background. See section .. for the method and setup, while secion .. and .. should provide some theoretical background.
+
+## Report
+See the report added as a pdf in case you would like to check some of the calculations or results. Do note that this report was written to keep track off the work and has not been properly finalised.
+
+## Cite
+Please cite the report in case you use this work.
