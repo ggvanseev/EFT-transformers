@@ -230,7 +230,7 @@ class NN(nn.Module):
                         n,
                         n,
                         N_net=N_net,
-                        W_std=E_std,
+                        W_std=W_std,
                         n_invariance_flag=n_invariance_flag,
                     )
                 )

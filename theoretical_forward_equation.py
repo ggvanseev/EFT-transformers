@@ -27,7 +27,7 @@ def G_MHSA_1(c_w: float, x: np.ndarray, n_independent_flag: bool = False) -> np.
     if n_independent_flag:
         c_w /= n_in
 
-    return c_w / 2 * np.einsum("dti,eui->detu", x, x)
+    return c_w * np.einsum("dti,eui->detu", x, x)
 
 
 # For the l-th layer, l>1
@@ -89,7 +89,7 @@ def G_MHSA(
     E_std: float,
     n: int,
     n_h: int,
-    c_w: float,
+    W_std: float,
     x: np.ndarray,
     invariance_flags={"n": True, "n_t": False, "n_h": False},
     forward_use_std_flag: bool = False,
@@ -99,11 +99,11 @@ def G_MHSA(
 
     input:
     n_layers: int, the number of layers
-    c_q: float, the standard deviation of the query weight
-    c_e: float, the standard deviation of the encoder-decoder weight
+    Q_std: float, the standard deviation of the query weight
+    E_std: float, the standard deviation of the encoder-decoder weight
     n: int, the number of neurons
     n_h: int, the number of heads
-    c_w: float, the weight of the first layer
+    W_std: float, the standard deviation of the weights of the first layer
     x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
     invariance_flags: dict{bool}, whether to divide by the number of features
     forward_use_std_flag: bool, whether to use the standard deviation or covariance
@@ -121,9 +121,11 @@ def G_MHSA(
     if forward_use_std_flag:
         c_q = Q_std
         c_e = E_std
+        c_w = W_std
     else:
         c_q = Q_std**2
         c_e = E_std**2
+        c_w = W_std**2
 
     # A matrix to store all the layers
     G_all = np.zeros((n_layers, d, d, n_t, n_t))
@@ -158,7 +160,7 @@ def G_MLP_1(c_w: float, x: np.ndarray, n_independent_flag: bool = False) -> np.n
     if n_independent_flag:
         c_w /= n_in
 
-    return c_w / 2 * np.einsum("di,ei->de", x, x)
+    return c_w * np.einsum("di,ei->de", x, x)
 
 
 def G_MLP_forward(
@@ -181,9 +183,9 @@ def G_MLP_forward(
 
     if n_independent_flag:
 
-        return c_w / 2 * G_prime
+        return c_w * G_prime
     else:
-        return c_w * n / 2 * G_prime
+        return c_w * n * G_prime
 
 
 def G_MLP(
@@ -202,7 +204,7 @@ def G_MLP(
     n: int, the number of neurons
     n_h: int, the number of heads
     W_std: float, the standard deviation of the weights
-    x: np.ndarray, shape=(d, t, i), the input tensor with n_in features
+    x: np.ndarray, shape=(d, i), the input tensor with n_in features
     n_independent_flag: bool, whether to divide by the number of features
     forward_use_std_flag: bool, whether to use the standard deviation or covariance
     if True, the forward equation uses the std instead of the variance.
